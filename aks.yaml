@@ -26,3 +26,14 @@ aks:
       default_size: M
       min_count: 1
       max_count: 2
+
+  networking:
+    mode: new
+    cidr_source: networking_team
+
+    segments:
+      system:
+        subnet_name: snet-aks-system
+
+      user:
+        subnet_name: snet-aks-user
