@@ -1,0 +1,28 @@
+aks:
+  kubernetes:
+    allowed_versions:
+      - "1.32"
+      - "1.33"
+
+  cluster:
+    sku_tier: Standard
+    private_cluster: true
+
+  nodepools:
+    system:
+      mode: System
+      sizes:
+        S: Standard_D4s_v5
+        M: Standard_D8s_v5
+      default_size: S
+      min_count: 1
+      max_count: 3
+
+    user:
+      mode: User
+      sizes:
+        S: Standard_D4s_v5
+        M: Standard_D8s_v5
+      default_size: M
+      min_count: 1
+      max_count: 2
