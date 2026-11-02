@@ -27,7 +27,7 @@
     "aws/addons/main.tf": "eb98f2b4fb40f171a5dc9f4b2f6596a02eb50fe902f8e181517c05ee7bdbc20e",
     "aws/addons/versions.tf": "7299ec00899abb8d9b01b7c1dac2be89fb5f157453ee1cb5f17c92073a1b69b5",
     "aws/addons/README.md": "4fe9fe9efdd64c259b544ac6ae17f53da219845395ccfea2ea4fe81d5b680dab",
-    "aws/addons/variables.tf": "99364ae980f7cc10781ef3f11ca3b80544231e381f3f5ab935970d199b2bb46a",
+    "aws/addons/variables.tf": "eb79d5d35ae45186abd0c874265594fb6dd8d2fe3012ad312b48ba682b2bdd46",
     "aws/observability/outputs.tf": "eab4d8e7a9bde7e2d29c37eba6be393d03de857423ec01974b223293fc832321",
     "aws/observability/main.tf": "3ae74cb66870de670eff34280e7755dd723c9a890e5c1195e7ed714687a5af85",
     "aws/observability/versions.tf": "7299ec00899abb8d9b01b7c1dac2be89fb5f157453ee1cb5f17c92073a1b69b5",
