@@ -1,0 +1,105 @@
+name: Terraform apply D001 dev eks-01
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: terraform-D001-dev-eks-01
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    environment: D001-dev-eks-01-plan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Activation and identity gates
+        env:
+          NETWORKING_APPROVED: ${{ vars.NETWORKING_APPROVED }}
+          AUTOMATION_ENABLED: ${{ vars.AUTOMATION_ENABLED }}
+          ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$AUTOMATION_ENABLED" = true
+          test "$NETWORKING_APPROVED" = true
+          test "$GITHUB_REPOSITORY" = 'REPLACE_OWNER/platform-engineering-devs'
+          [[ "$ACCOUNT_ID" =~ ^[0-9]{12}$ ]]
+          :
+          # Fail closed until network inputs, immutable module SHA and scoped IAM
+          # have been reviewed. Remove only via an explicitly approved activation PR.
+          echo 'BLOCKED: Networking and workspace contract pending' >&2
+          exit 1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.10.5
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: gha-${{ github.run_id }}
+      - name: Create bound plan
+        working-directory: workspaces/D001/terraform/aws/dev/eks-01
+        run: |
+          set -euo pipefail
+          test "${TF_WORKSPACE:-default}" = default
+          terraform init -input=false -lockfile=readonly -backend-config=backend.hcl
+          terraform validate
+          terraform plan  -input=false -lock-timeout=5m -out=approved.tfplan
+          sha256sum approved.tfplan > approved.sha256
+          printf '%s\n' "$GITHUB_SHA" > approved.commit
+          printf '%s\n' 'D001/aws/dev/eks-01' > approved.instance
+          terraform show -no-color approved.tfplan > review.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: approved-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            workspaces/D001/terraform/aws/dev/eks-01/approved.*
+            workspaces/D001/terraform/aws/dev/eks-01/review.txt
+          retention-days: 1
+          if-no-files-found: error
+  execute:
+    needs: plan
+    environment: D001-dev-eks-01-apply
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: approved-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: workspaces/D001/terraform/aws/dev/eks-01
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.10.5
+      - name: Verify provenance before credentials
+        working-directory: workspaces/D001/terraform/aws/dev/eks-01
+        run: |
+          set -euo pipefail
+          test "$(cat approved.commit)" = "$GITHUB_SHA"
+          test "$(cat approved.instance)" = 'D001/aws/dev/eks-01'
+          sha256sum -c approved.sha256
+      - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+        with:
+          role-to-assume: ${{ vars.AWS_EXECUTION_ROLE_ARN }}
+          aws-region: us-east-1
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: gha-${{ github.run_id }}
+      - working-directory: workspaces/D001/terraform/aws/dev/eks-01
+        run: |
+          set -euo pipefail
+          test "${TF_WORKSPACE:-default}" = default
+          terraform init -input=false -lockfile=readonly -backend-config=backend.hcl
+          terraform apply -input=false -lock-timeout=5m approved.tfplan

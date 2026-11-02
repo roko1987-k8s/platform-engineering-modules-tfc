@@ -1,0 +1,23 @@
+# SYNTHETIC TEST ONLY. Not an AWS availability/certification statement.
+eks:
+  schema_version: 1
+  configuration_model: system_user_profiles
+  kubernetes:
+    allowed_versions: ["1.99"]
+  cluster:
+    allowed_regions: [test-region-1]
+  nodegroups:
+    system:
+      sizes: {S: synthetic.small, M: synthetic.medium}
+      default_size: S
+      allowed_capacity_types: [ON_DEMAND]
+      min_count: 1
+      max_count: 2
+    user:
+      sizes: {S: synthetic.medium, M: synthetic.large}
+      default_size: S
+      allowed_capacity_types: [ON_DEMAND]
+      min_count: 1
+      max_count: 2
+    limits: {max_total_nodes: 4}
+  networking: {conformity: pending, approved_options: {}}

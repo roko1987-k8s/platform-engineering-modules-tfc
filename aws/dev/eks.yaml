@@ -1,16 +1,13 @@
-
 eks:
   schema_version: 1
   configuration_model: system_user_profiles
 
-  # Kubernetes y región autorizados
   kubernetes:
     allowed_versions: ["1.36"]
 
   cluster:
     allowed_regions: [us-east-1]
 
-  # Perfiles definidos por Platform Engineering
   nodegroups:
     system:
       sizes:
@@ -18,6 +15,7 @@ eks:
         M: m7i.xlarge
       default_size: S
       allowed_capacity_types: [ON_DEMAND]
+      # Limites autorizados; desired se elige dentro del rango en la solicitud.
       min_count: 1
       max_count: 2
 
@@ -27,13 +25,13 @@ eks:
         M: m7i.2xlarge
       default_size: S
       allowed_capacity_types: [ON_DEMAND]
+      # Limites autorizados; desired se elige dentro del rango en la solicitud.
       min_count: 1
       max_count: 2
 
     limits:
       max_total_nodes: 4
 
-  # Pendiente de definición por Networking
   networking:
     conformity: pending
     approved_options: {}

@@ -1,0 +1,16 @@
+# Publication hygiene: configuration and lockfiles remain reviewable.
+.env
+.env.*
+**/.env
+**/.env.*
+**/.terraform/
+**/*.tfstate*
+**/*.tfplan
+**/crash.log
+**/*.log
+**/__pycache__/
+**/*.pyc
+**/*.tmp
+**/*.swp
+.DS_Store
+node_modules/

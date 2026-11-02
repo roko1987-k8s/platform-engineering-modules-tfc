@@ -1,0 +1,4 @@
+{
+  "system": {"size": "S", "minimum": 1, "desired": 1, "maximum": 2},
+  "user": {"size": "M", "minimum": 1, "desired": 2, "maximum": 2}
+}

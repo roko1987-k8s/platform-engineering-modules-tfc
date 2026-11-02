@@ -1,0 +1,25 @@
+name: Terraform Validate
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.10.5
+      - run: terraform fmt -check -recursive
+      # Update this trusted path only after reviewing the actual workspace layout.
+      - working-directory: workspaces/D001/terraform/aws/dev/eks-01
+        run: |
+          set -euo pipefail
+          terraform init -backend=false -input=false -lockfile=readonly
+          terraform validate
+          # Add only reviewed offline/mock tests; terraform test can apply resources.

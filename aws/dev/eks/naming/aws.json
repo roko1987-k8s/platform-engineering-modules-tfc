@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "region_codes": {
+    "us-east-1": "ue1"
+  },
+  "environment_codes": {
+    "dev": "dev",
+    "cert": "cert",
+    "prod": "prod"
+  },
+  "resource_prefixes": {
+    "eks": "eks",
+    "vpc": "vpc",
+    "infra": "infra",
+    "user": "user"
+  },
+  "sequence_width": 2
+}

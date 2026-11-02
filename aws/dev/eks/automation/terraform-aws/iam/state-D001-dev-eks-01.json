@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::s3ue1p001dev01",
+      "Condition": {
+        "StringEquals": {
+          "s3:prefix": [
+            "states/D001/aws/dev/eks-01/terraform.tfstate",
+            "states/D001/aws/dev/eks-01/terraform.tfstate.tflock"
+          ]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::s3ue1p001dev01/states/D001/aws/dev/eks-01/terraform.tfstate"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::s3ue1p001dev01/states/D001/aws/dev/eks-01/terraform.tfstate.tflock"
+    }
+  ]
+}
