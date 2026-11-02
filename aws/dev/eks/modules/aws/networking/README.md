@@ -1,10 +1,10 @@
 # networking
 
-Creates NO VPC, subnet, route, NAT or VPC endpoint. Looks up the supplied VPC/subnets using data sources, validates their formats/uniqueness, VPC membership, VPC DNS support/hostnames, two availability zones for each subnet set, and no automatic public IP allocation on node subnets. Data lookups require credentials only in a future approved live plan; tests mock them.
+Creates NO VPC, subnet, route, NAT or VPC endpoint. Looks up the supplied VPC/subnets using data sources, validates their formats/uniqueness, VPC membership, VPC DNS support/hostnames, two availability zones for each subnet set, and no automatic public IP allocation on node subnets. Data lookups require credentials only in a future approved live plan; offline validation must not perform those lookups.
 
 Networking must provide conformity=approved and a nonempty approval reference with explicit review of routing, private API reachability, DNS and registry/STS/EKS connectivity. Those attestations are not live network probes. Provide approved VPC ID, cluster and node subnet IDs, AZ placement, free-IP sizing, routes, DNS, endpoint SG ownership, S3/ECR/STS/EKS reachability and any other required egress. Cluster subnets and node subnets may overlap if explicitly approved; duplicates within either input are rejected.
 
-Reference composition additionally requires the selected approved_options entry to match the exact VPC and subnet sets. Current YAML conformity=pending and approved_options={} fail closed. No fictitious segment is provided. NACL, route table correctness, address exhaustion, available AZs, AWS-reserved subnets, workload IP usage, endpoint policies and service availability require later real checks. DNS/route review flags cannot certify those facts automatically.
+Before deployment, the selected approved_options entry must match the exact VPC and subnet sets. Current YAML conformity=pending and approved_options={} fail closed. No fictitious segment is provided. NACL, route table correctness, address exhaustion, available AZs, AWS-reserved subnets, workload IP usage, endpoint policies and service availability require later real checks. DNS/route review flags cannot certify those facts automatically.
 
 ## Inputs
 

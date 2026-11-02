@@ -34,7 +34,7 @@ function render(context, selection) {
   if (total>c.nodegroups.limits.max_total_nodes) fail('Aggregate maximum exceeded');
   const instance=`eks-${String(context.sequence).padStart(2,'0')}`;
   const workspace=`workspaces/${context.teamId}/terraform/aws/${context.environment}/${instance}`;
-  let main=fs.readFileSync(path.join(ROOT,'templates/eks/main.tf.template'),'utf8');
+  let main=fs.readFileSync(path.join(ROOT,'../main.tf'),'utf8');
   const values={WORKSPACE:workspace,TEAM:JSON.stringify(context.teamId),ENVIRONMENT:JSON.stringify(context.environment),INSTANCE:JSON.stringify(instance),PROFILES:JSON.stringify(profiles),COUNTS:JSON.stringify(counts),MODULE_SHA:context.moduleSha,SEQUENCE:String(context.sequence)};
   // JSON object member colons are valid HCL expression separators.
   for (const [k,v] of Object.entries(values)) main=main.replaceAll(`@@${k}@@`,v);
