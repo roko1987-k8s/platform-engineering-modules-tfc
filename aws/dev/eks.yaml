@@ -1,0 +1,55 @@
+eks:
+  schema_version: 1
+  configuration_model: system_user_profiles
+
+  kubernetes:
+    allowed_versions: ["1.36"]
+
+  cluster:
+    allowed_regions: [us-east-1]
+
+  nodegroups:
+    system:
+      sizes:
+        S: m7i.large
+        M: m7i.xlarge
+      default_size: S
+      allowed_capacity_types: [ON_DEMAND]
+      # Limites autorizados; desired se envia en la solicitud (laboratorio: 2).
+      min_count: 2
+      max_count: 3
+
+    user:
+      sizes:
+        S: m7i.xlarge
+        M: m7i.2xlarge
+      default_size: S
+      allowed_capacity_types: [ON_DEMAND]
+      # Limites autorizados; desired se envia en la solicitud (laboratorio: 1).
+      min_count: 1
+      max_count: 4
+
+    limits:
+      max_total_nodes: 7
+
+  networking:
+    conformity: pending
+    approved_options: {}
+
+  compatibility:
+    by_region:
+      us-east-1:
+        allowed_kubernetes_versions: ["1.36"]
+        allowed_instance_types: [m7i.large, m7i.xlarge, m7i.2xlarge]
+        allowed_network_ids: []
+    by_instance_type:
+      m7i.large:
+        allowed_kubernetes_versions: ["1.36"]
+        allowed_capacity_types: [ON_DEMAND]
+      m7i.xlarge:
+        allowed_kubernetes_versions: ["1.36"]
+        allowed_capacity_types: [ON_DEMAND]
+      m7i.2xlarge:
+        allowed_kubernetes_versions: ["1.36"]
+        allowed_capacity_types: [ON_DEMAND]
+    by_network: {}
