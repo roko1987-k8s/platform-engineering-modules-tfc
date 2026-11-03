@@ -3,11 +3,14 @@
 Rutas de este documento relativas a la raíz del repositorio. Catálogo autorizado:
 `aws/dev/eks.yaml`. Plantilla principal: `aws/dev/main.tf`. Ocho módulos permanecen
 en `aws/dev/eks/modules/`: networking, IAM, security-groups, EKS, nodegroups,
-add-ons, observability y naming. Sus fuentes Git y contratos no se modifican.
+add-ons, observability y naming. Las fuentes Git de la plantilla EKS apuntan a
+`roko1987-k8s/platform-engineering-modules-tfc` y conservan sus rutas y contratos.
+Observability permanece disponible como módulo independiente; la plantilla actual
+no lo invoca. Addons se utiliza en dos fases; no se añade wiring nuevo.
 
 ## Contrato de generación
 
-`aws/dev/eks/tools/render-eks.cjs` exporta render(context, selection) y una CLI:
+`aws/dev/eks/tools/render-eks.cjs` exporta `render(context, selection)` sin formato y una CLI:
 
 ```sh
 node aws/dev/eks/tools/render-eks.cjs "$CONTEXT_FILE" "$SELECTION_FILE" "$OUTPUT_ROOT"
@@ -23,7 +26,22 @@ La selección contiene exactamente system y user, cada uno con size,
 minimum, desired y maximum. Se respetan tamaños y límites del catálogo sin mapas
 EC2 alternativos. La política `aws/dev/eks/naming/aws.json` es una dependencia de
 generación, no un catálogo alternativo. El paquete Node yaml debe estar disponible
-en el entorno del llamador; TERRAFORM_BIN selecciona el binario existente para fmt.
+en el entorno del llamador.
+
+`aws/dev/eks/tools/render-eks-pure.cjs` exporta `renderPure(context, selection, sources)`.
+`sources` contiene `catalogBytes`, `namingBytes` y `template`, procedentes de las
+fuentes autorizadas anteriores. Devuelve strings en memoria: no lee archivos,
+no escribe workspaces y no ejecuta procesos. El llamador conserva la obligación
+de verificar SHA, procedencia, identidad y autorización antes de consumirlo.
+`render` es solo el adaptador de lectura de esas fuentes locales existentes.
+
+El formato es una operación explícita separada: `formatRendered(result)` devuelve
+una copia formateada o la CLI admite `--format` como último argumento.
+Solo esa opción ejecuta `terraform fmt -` para main.tf y backend.hcl;
+`TERRAFORM_BIN` selecciona el binario existente. El camino de preview debe usar
+exclusivamente `renderPure`, sin invocar el formateador ni la CLI que escribe.
+El cambio de valor predeterminado es intencional: consumidores que necesiten el
+formato anterior deben solicitarlo explícitamente fuera de preview.
 
 El resultado contiene workspace y cinco archivos: main.tf, backend.hcl,
 catalog.snapshot.json, naming.snapshot.json y generation.json. La ruta deriva
@@ -50,4 +68,34 @@ permisos mínimos y aprobaciones independientes. El draft no sustituye esas revi
 No cambiar Security Groups ni reglas 110–502 para desbloquearlo.
 
 La validación operativa y restricciones de versiones se documentan en README.md
-de la raíz. Los ensayos y fixtures se ejecutan fuera del repositorio publicable.
+de la raíz. Las pruebas del renderer incluidas para revisión/publicación manual
+se ejecutan sin fixtures, archivos de salida, red ni Terraform:
+
+```sh
+NODE_PATH="$RENDERER_NODE_MODULES" node --test aws/dev/eks/tools/render-eks.test.cjs
+```
+
+`RENDERER_NODE_MODULES` referencia dependencias ya instaladas y revisadas que
+contengan `yaml`. Si el entorno ya lo resuelve, puede omitirse NODE_PATH.
+No se instala ninguna dependencia. El formateador se prueba con un mock; la CLI
+de escritura y Terraform no se ejecutan. Otros ensayos/fixtures siguen fuera del
+árbol publicable.
+
+## Referencias pendientes después de publicar manualmente
+
+`@@MODULE_SHA@@` permanece en la plantilla: es un token, no un SHA remoto inventado.
+El renderer continúa exigiendo `context.moduleSha` de 40 caracteres hexadecimales.
+Tras publicar manualmente, comprobar en remoto el commit elegido y las rutas EKS
+antes de suministrar ese SHA desde un contexto autorizado. No usar main como pin,
+sustituir el token por un marcador ficticio ni fijar el SHA dentro del renderer.
+
+Fijar por separado los commits del catálogo/composición y sus digests revisados:
+YAML original, snapshot JSON canónico, plantilla, naming y renderer puro. Un cambio
+de plantilla o renderer requiere recalcular sus digests. Esta preparación local no
+acredita el futuro commit publicado, ni concede permisos o aprobaciones.
+
+El catálogo EKS mantenido aquí continúa en `aws/dev/eks.yaml`, sin cambios de
+contenido. Esta consolidación solo modifica este repositorio. Los consumidores
+externos que fijan `platform-engineering-vars-tfc/aws/dev/eks.yaml` necesitan una
+revisión separada de su fuente y pins; no se implementa un fallback ni se modifican
+Orchestrator, Terraform Agent o Backstage en esta tarea.

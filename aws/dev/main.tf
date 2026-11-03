@@ -74,7 +74,7 @@ resource "terraform_data" "networking_gate" {
 provider "aws" { region = one(local.catalog.cluster.allowed_regions) }
 
 module "networking" {
-  source             = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/aws/networking?ref=@@MODULE_SHA@@"
+  source             = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/networking?ref=@@MODULE_SHA@@"
   count              = local.networking_ready ? 1 : 0
   vpc_id             = terraform_data.networking_gate.output.networking.vpc_id
   cluster_subnet_ids = terraform_data.networking_gate.output.networking.cluster_subnet_ids
@@ -84,14 +84,14 @@ module "networking" {
   depends_on         = [terraform_data.networking_gate]
 }
 module "iam" {
-  source     = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/aws/iam?ref=@@MODULE_SHA@@"
+  source     = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/iam?ref=@@MODULE_SHA@@"
   count      = local.networking_ready ? 1 : 0
   name       = try(terraform_data.networking_gate.output.execution.resource_prefix, null)
   tags       = try(var.reviewed_execution.tags, {})
   depends_on = [terraform_data.networking_gate, module.networking]
 }
 module "security_groups" {
-  source = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/aws/security-groups?ref=@@MODULE_SHA@@"
+  source = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/security-groups?ref=@@MODULE_SHA@@"
   count  = local.networking_ready ? 1 : 0
   name   = try(terraform_data.networking_gate.output.execution.resource_prefix, null)
   vpc_id = module.networking[0].vpc_id
@@ -100,7 +100,7 @@ module "security_groups" {
   depends_on = [terraform_data.networking_gate]
 }
 module "eks" {
-  source                          = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/aws/eks?ref=@@MODULE_SHA@@"
+  source                          = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/eks?ref=@@MODULE_SHA@@"
   count                           = local.networking_ready ? 1 : 0
   name                            = module.naming.names.eks
   catalog                         = local.catalog
@@ -115,7 +115,7 @@ module "eks" {
   depends_on                      = [terraform_data.networking_gate]
 }
 module "foundation_addons" {
-  source       = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/aws/addons?ref=@@MODULE_SHA@@"
+  source       = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/addons?ref=@@MODULE_SHA@@"
   count        = local.networking_ready ? 1 : 0
   cluster_name = module.eks[0].name
   addons       = try({ for name, addon in var.reviewed_execution.addons : name => addon if name != "coredns" }, {})
@@ -123,7 +123,7 @@ module "foundation_addons" {
   depends_on   = [terraform_data.networking_gate]
 }
 module "nodegroups" {
-  source             = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/aws/nodegroups?ref=@@MODULE_SHA@@"
+  source             = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/nodegroups?ref=@@MODULE_SHA@@"
   count              = local.networking_ready ? 1 : 0
   cluster_name       = module.eks[0].name
   kubernetes_version = one(local.catalog.kubernetes.allowed_versions)
@@ -137,7 +137,7 @@ module "nodegroups" {
   depends_on         = [terraform_data.networking_gate, module.foundation_addons]
 }
 module "dns_addon" {
-  source       = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/aws/addons?ref=@@MODULE_SHA@@"
+  source       = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/addons?ref=@@MODULE_SHA@@"
   count        = local.networking_ready ? 1 : 0
   cluster_name = module.eks[0].name
   addons       = try({ for name, addon in var.reviewed_execution.addons : name => addon if name == "coredns" }, {})
@@ -147,7 +147,7 @@ module "dns_addon" {
 
 # Pure naming is available for review even while networking blocks deployment.
 module "naming" {
-  source      = "git::https://github.com/roko1987-k8s/platform-engineering-vars-tfc.git//aws/dev/eks/modules/naming?ref=@@MODULE_SHA@@"
+  source      = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/naming?ref=@@MODULE_SHA@@"
   policy      = jsondecode(file("${path.module}/naming.snapshot.json"))
   region      = one(local.catalog.cluster.allowed_regions)
   team_id     = local.team
