@@ -99,3 +99,31 @@ contenido. Esta consolidación solo modifica este repositorio. Los consumidores
 externos que fijan `platform-engineering-vars-tfc/aws/dev/eks.yaml` necesitan una
 revisión separada de su fuente y pins; no se implementa un fallback ni se modifican
 Orchestrator, Terraform Agent o Backstage en esta tarea.
+
+
+## Composición consumible y workspace de un archivo
+
+La raíz de `aws/dev/eks/` expone una composición Terraform. Reutiliza los módulos
+hijos mediante rutas relativas y lee `../eks.yaml` y `naming/aws.json` dentro del
+mismo paquete Git. No configura provider ni backend en el módulo hijo.
+
+Entradas obligatorias: `team_id`, `application_code`, `environment`, `region`,
+`sequence`, `kubernetes_version`, `system_size`, `user_size` y `node_counts`
+(objeto System/User con minimum/desired/maximum). El catálogo determina perfiles,
+flavors y límites; el consumidor no publica una copia del catálogo.
+`proposal_mode` acepta únicamente `DESIGN_WITHOUT_AWS_ACCOUNT` en esta fase.
+`reviewed_execution` es una interfaz tipada futura, null por defecto: incluso si
+se suministra, el modo de diseño mantiene los módulos AWS sin instancias y el
+gate bloquea ejecución. No es una autorización de infraestructura.
+
+El laboratorio autoriza AWS/dev → main. El caller registra el commit resuelto y
+los digests en su journal y revalida la rama antes de publicar. El único archivo
+publicado por el contrato `eks-module-v2` es `main.tf`, cuyo source usa `ref=main`.
+Cambios de rama después del PR requieren revisión antes de cualquier ejecución;
+una rama mutable no ofrece reproducción histórica por sí sola.
+
+La plantilla `aws/dev/main.tf` y `renderPure` se conservan exclusivamente para
+compatibilidad del contrato anterior. No son la composición del contrato nuevo.
+Las salidas nuevas son `proposed_names`, `resolved_profiles` y `design_status`.
+Usar el validador offline oficial, mirror local y lockfile existente; ninguna
+validación estática autoriza plan/apply ni demuestra un clúster desplegable.

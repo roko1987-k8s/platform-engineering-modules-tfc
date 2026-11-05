@@ -28,7 +28,7 @@ def main():
     if not re.search(rb'provider\s+"registry.terraform.io/hashicorp/aws"\s*\{\s*version\s*=\s*"6\.20\.0"', lock_bytes):
         parser.error('The existing reviewed lockfile must select AWS 6.20.0.')
     targets = sorted(p for p in (ROOT / 'aws/dev/eks/modules/aws').iterdir() if p.is_dir())
-    targets += [ROOT / 'aws/dev/eks/modules/naming', ROOT / 'aws/dev/s3/modules/s3', ROOT / 'aws/dev/s3/bootstrap', ROOT / 'aws/dev/iam/modules/github-oidc']
+    targets += [ROOT / 'aws/dev/eks', ROOT / 'aws/dev/eks/modules/naming', ROOT / 'aws/dev/s3/modules/s3', ROOT / 'aws/dev/s3/bootstrap', ROOT / 'aws/dev/iam/modules/github-oidc']
     with tempfile.TemporaryDirectory(prefix='platform-offline-validation-') as temporary:
         work = Path(temporary)
         shutil.copytree(ROOT / 'aws', work / 'aws', ignore=shutil.ignore_patterns('.terraform', '*.tfstate*', '*.tfvars*', '*.tfplan', '*.log', '.env*', '__pycache__'))
