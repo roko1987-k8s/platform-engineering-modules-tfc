@@ -20,6 +20,7 @@ eks:
           # Limites autorizados; desired se elige dentro del rango en la solicitud.
           min_count: 1
           max_count: 2
+          default_count: 2
 
         user:
           sizes:
@@ -29,6 +30,7 @@ eks:
           allowed_capacity_types: [ON_DEMAND]
           min_count: 1
           max_count: 10
+          default_count: 2
 
         limits:
           max_total_nodes: 12
