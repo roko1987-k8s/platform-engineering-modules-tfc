@@ -39,11 +39,11 @@ variable "sequence" {
   }
 }
 variable "subnet_counts" {
-  description = "How many cluster and node subnet names to derive from names.vpc; zero keeps the previous outputs only."
-  type        = object({ cluster = optional(number, 0), node = optional(number, 0) })
+  description = "How many public, cluster and node subnet names to derive from names.vpc; zero keeps the previous outputs only."
+  type        = object({ public = optional(number, 0), cluster = optional(number, 0), node = optional(number, 0) })
   default     = {}
   validation {
-    condition     = alltrue([for n in [var.subnet_counts.cluster, var.subnet_counts.node] : n >= 0 && n <= 16 && floor(n) == n])
+    condition     = alltrue([for n in [var.subnet_counts.public, var.subnet_counts.cluster, var.subnet_counts.node] : n >= 0 && n <= 16 && floor(n) == n])
     error_message = "Subnet counts must be integers between 0 and 16."
   }
 }

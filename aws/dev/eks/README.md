@@ -101,16 +101,22 @@ revisión separada de su fuente y pins; no se implementa un fallback ni se modif
 Orchestrator, Terraform Agent o Backstage en esta tarea.
 
 
-## Networking: VPC y subnets creadas por Terraform
+## Modos de ejecución y Networking
 
-El módulo `modules/aws/networking` crea la VPC y las subnets privadas; no
-administra Security Groups (los de EKS pertenecen al módulo `security-groups`). En la composición, la entrada única es
-`reviewed_execution.networking` (se mantiene dentro de `reviewed_execution` porque
-el Terraform Agent verifica el conjunto exacto de variables de esta raíz):
+`proposal_mode` (en el `main.tf` del workspace) admite:
+
+| Modo | Qué crea | Entradas de `reviewed_execution` requeridas |
+|---|---|---|
+| `DESIGN_WITHOUT_AWS_ACCOUNT` (default) | Nada; `NETWORKING_PENDING` bloquea el plan | — |
+| `NETWORKING_ONLY` | VPC, subnets públicas/privadas, IGW, NAT, rutas | `aws_account_id`, `networking` |
+| `EKS_CLUSTER` | Lo anterior + IAM del clúster, SG, EKS, add-ons, node groups | además `resource_prefix`, `kms_key_arn`, `log_retention_days`, `root_volumes` y `networking.connectivity` atestiguada |
+
+`networking` es el objeto único asignado por Networking:
 
 ```hcl
 networking = {
   vpc_cidr             = "<asignado por Networking>"
+  public_subnet_cidrs  = ["<asignado>"]               # uno por NAT Gateway
   cluster_subnet_cidrs = ["<asignado>", "<asignado>"]
   node_subnet_cidrs    = ["<asignado>", "<asignado>"]
   approval_reference   = "<ticket de aprobación>"
@@ -118,23 +124,23 @@ networking = {
 }
 ```
 
-- Región: `var.region`, validada contra `aws/dev/eks.yaml`. El provider heredado
-  y todas las AZ deben pertenecer a ella. Las subnets se reparten de forma
-  determinista en al menos dos AZ (nombres ordenados, subnet `i` → zona `i mod n`).
-- Nombres: `module.naming` genera `names.vpc` y `subnet_names`
-  (`<names.vpc>-cluster-NN`, `<names.vpc>-node-NN`). Los tags `Team`,
-  `ApplicationCode` y `Environment` salen de las entradas autorizadas y
-  prevalecen sobre los tags revisados.
-- Gate en dos etapas, sin dependencia circular: con los CIDR aprobados y la
-  referencia de aprobación se crean la VPC y las subnets. IAM, security groups,
-  EKS, add-ons y node groups esperan a que `connectivity` esté atestiguada
-  (`check "connectivity_review"` avisa con `CONNECTIVITY_PENDING`).
-  Las salidas `proposed_subnet_names` y `networking_status` reflejan ese estado.
-- `proposal_mode` sigue aceptando solo `DESIGN_WITHOUT_AWS_ACCOUNT`, así que los
-  módulos AWS siguen con cero instancias y `NETWORKING_PENDING` bloquea el plan.
-- No se crean IGW, NAT Gateway ni VPC endpoints: la salida hacia ECR, S3, STS y
-  EKS es una decisión arquitectónica pendiente (ver
-  `modules/aws/networking/README.md`). No se incorporan CIDR ficticios.
+- Se mantiene dentro de `reviewed_execution` porque el Terraform Agent verifica el
+  conjunto exacto de variables de esta raíz.
+- Región: `var.region`, validada contra `aws/dev/eks.yaml`; provider y AZ deben
+  pertenecer a ella. Reparto determinista en al menos dos AZ.
+- Nombres: `module.naming` (`names.vpc`, `subnet_names`). Tags `Team`,
+  `ApplicationCode` y `Environment` desde las entradas autorizadas.
+- Gates (`terraform_data.networking_gate`, solo más estrictos):
+  `NETWORKING_PENDING` sin red aprobada, `CONNECTIVITY_PENDING` y
+  `EXECUTION_INPUT_INCOMPLETE` en `EKS_CLUSTER`. `terraform_data.account_gate`
+  rechaza credenciales de otra cuenta (`ACCOUNT_MISMATCH`).
+- Transición segura: los módulos reciben valores de variables/locals, no del
+  output del gate, y no dependen de él con `depends_on`. Así un cambio de modo o
+  de `reviewed_execution` no vuelve desconocidos atributos ForceNew (CIDR, AZ) y
+  `NETWORKING_ONLY` → `EKS_CLUSTER` conserva `module.networking[0]` sin
+  reemplazos (probado offline). Volver de `EKS_CLUSTER` a `NETWORKING_ONLY`
+  destruiría el clúster: el Terraform Agent rechaza planes con borrados fuera de
+  la operación Destroy.
 
 ## Composición consumible y workspace de un archivo
 
@@ -146,10 +152,9 @@ Entradas obligatorias: `team_id`, `application_code`, `environment`, `region`,
 `sequence`, `kubernetes_version`, `system_size`, `user_size` y `node_counts`
 (objeto System/User con minimum/desired/maximum). El catálogo determina perfiles,
 flavors y límites; el consumidor no publica una copia del catálogo.
-`proposal_mode` acepta únicamente `DESIGN_WITHOUT_AWS_ACCOUNT` en esta fase.
-`reviewed_execution` es una interfaz tipada futura, null por defecto: incluso si
-se suministra, el modo de diseño mantiene los módulos AWS sin instancias y el
-gate bloquea ejecución. No es una autorización de infraestructura.
+`proposal_mode` y `reviewed_execution`: ver "Modos de ejecución y Networking".
+Ningún modo es una autorización: la ejecución requiere la autorización
+independiente del Terraform Agent.
 
 El laboratorio autoriza AWS/dev → main. El caller registra el commit resuelto y
 los digests en su journal y revalida la rama antes de publicar. El único archivo

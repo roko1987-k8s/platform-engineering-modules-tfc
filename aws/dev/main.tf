@@ -39,12 +39,13 @@ locals {
     conformity           = "pending"
     option_id            = null
     vpc_cidr             = null
+    public_subnet_cidrs  = null
     cluster_subnet_cidrs = null
     node_subnet_cidrs    = null
     approval_reference   = null
     connectivity         = null
   }
-  networking_ready = local.networking.conformity == "approved" && local.catalog.networking.conformity == "approved" && local.networking.vpc_cidr != null && local.networking.cluster_subnet_cidrs != null && local.networking.node_subnet_cidrs != null && local.networking.approval_reference != null && local.networking.option_id != null && local.networking.connectivity != null
+  networking_ready = local.networking.conformity == "approved" && local.catalog.networking.conformity == "approved" && local.networking.vpc_cidr != null && local.networking.public_subnet_cidrs != null && local.networking.cluster_subnet_cidrs != null && local.networking.node_subnet_cidrs != null && local.networking.approval_reference != null && local.networking.option_id != null && local.networking.connectivity != null
 
   selections = {
     for role, size in local.requested_profiles : role => {
@@ -82,6 +83,7 @@ module "networking" {
   region       = one(local.catalog.cluster.allowed_regions)
   networking = {
     vpc_cidr             = terraform_data.networking_gate.output.networking.vpc_cidr
+    public_subnet_cidrs  = terraform_data.networking_gate.output.networking.public_subnet_cidrs
     cluster_subnet_cidrs = terraform_data.networking_gate.output.networking.cluster_subnet_cidrs
     node_subnet_cidrs    = terraform_data.networking_gate.output.networking.node_subnet_cidrs
     approval_reference   = terraform_data.networking_gate.output.networking.approval_reference
@@ -160,6 +162,7 @@ module "naming" {
   environment = local.environment
   sequence    = @@SEQUENCE@@
   subnet_counts = {
+    public  = try(length(local.networking.public_subnet_cidrs), 0)
     cluster = try(length(local.networking.cluster_subnet_cidrs), 0)
     node    = try(length(local.networking.node_subnet_cidrs), 0)
   }

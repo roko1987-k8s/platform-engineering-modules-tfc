@@ -9,15 +9,16 @@ variable "name" {
 
 variable "subnet_names" {
   description = "Subnet names produced by the central naming module, one per CIDR and in the same order."
-  type        = object({ cluster = list(string), node = list(string) })
+  type        = object({ public = list(string), cluster = list(string), node = list(string) })
   validation {
     condition = (
+      length(var.subnet_names.public) == length(var.networking.public_subnet_cidrs) &&
       length(var.subnet_names.cluster) == length(var.networking.cluster_subnet_cidrs) &&
       length(var.subnet_names.node) == length(var.networking.node_subnet_cidrs) &&
-      length(distinct(concat(var.subnet_names.cluster, var.subnet_names.node))) == length(concat(var.subnet_names.cluster, var.subnet_names.node)) &&
-      alltrue([for n in concat(var.subnet_names.cluster, var.subnet_names.node) : can(regex("^[a-z][a-z0-9-]{2,99}$", n))])
+      length(distinct(flatten(values(var.subnet_names)))) == length(flatten(values(var.subnet_names))) &&
+      alltrue([for n in flatten(values(var.subnet_names)) : can(regex("^[a-z][a-z0-9-]{2,99}$", n))])
     )
-    error_message = "Provide one unique central-naming subnet name per cluster and node CIDR."
+    error_message = "Provide one unique central-naming subnet name per public, cluster and node CIDR."
   }
 }
 
@@ -33,9 +34,10 @@ variable "region" {
 # Single Networking input. Cloud Infrastructure / Networking assign the CIDRs and
 # the approval reference; nothing here guesses or defaults a segment.
 variable "networking" {
-  description = "VPC CIDR, cluster/node subnet CIDRs and the Networking approval reference. Connectivity review is attested after the VPC exists."
+  description = "VPC CIDR, public (NAT) / cluster / node subnet CIDRs and the Networking approval reference. Connectivity review is attested after the VPC exists."
   type = object({
     vpc_cidr             = string
+    public_subnet_cidrs  = list(string)
     cluster_subnet_cidrs = list(string)
     node_subnet_cidrs    = list(string)
     approval_reference   = string
@@ -74,18 +76,20 @@ variable "networking" {
     error_message = "vpc_cidr must be inside RFC 1918 private space (10/8, 172.16/12, 192.168/16)."
   }
 
+  # One NAT Gateway per public subnet: one for a single-NAT design, one per AZ for HA.
   validation {
     condition = (
+      length(var.networking.public_subnet_cidrs) >= 1 && length(var.networking.public_subnet_cidrs) <= 6 &&
       length(var.networking.cluster_subnet_cidrs) >= 2 && length(var.networking.cluster_subnet_cidrs) <= 6 &&
       length(var.networking.node_subnet_cidrs) >= 2 && length(var.networking.node_subnet_cidrs) <= 6
     )
-    error_message = "Provide between two and six cluster subnet CIDRs and between two and six node subnet CIDRs."
+    error_message = "Provide one to six public (NAT) subnet CIDRs and two to six cluster and node subnet CIDRs each."
   }
 
   # Every subnet: canonical IPv4, no smaller than /28, contained in the VPC CIDR.
   validation {
     condition = try(alltrue([
-      for cidr in concat(var.networking.cluster_subnet_cidrs, var.networking.node_subnet_cidrs) :
+      for cidr in concat(var.networking.public_subnet_cidrs, var.networking.cluster_subnet_cidrs, var.networking.node_subnet_cidrs) :
       can(cidrnetmask(cidr)) &&
       cidrsubnet(cidr, 0, 0) == cidr &&
       tonumber(split("/", cidr)[1]) <= 28 &&
@@ -95,11 +99,11 @@ variable "networking" {
     error_message = "Every subnet CIDR must be a canonical IPv4 network no smaller than /28 inside vpc_cidr."
   }
 
-  # No duplicates or overlaps between any two subnets (cluster or node).
+  # No duplicates or overlaps between any two subnets (public, cluster or node).
   validation {
     condition = try(alltrue(flatten([
-      for i, a in concat(var.networking.cluster_subnet_cidrs, var.networking.node_subnet_cidrs) : [
-        for j, b in concat(var.networking.cluster_subnet_cidrs, var.networking.node_subnet_cidrs) :
+      for i, a in concat(var.networking.public_subnet_cidrs, var.networking.cluster_subnet_cidrs, var.networking.node_subnet_cidrs) : [
+        for j, b in concat(var.networking.public_subnet_cidrs, var.networking.cluster_subnet_cidrs, var.networking.node_subnet_cidrs) :
         i == j || (
           cidrsubnet("${cidrhost(a, 0)}/${min(tonumber(split("/", a)[1]), tonumber(split("/", b)[1]))}", 0, 0) !=
           cidrsubnet("${cidrhost(b, 0)}/${min(tonumber(split("/", a)[1]), tonumber(split("/", b)[1]))}", 0, 0)
