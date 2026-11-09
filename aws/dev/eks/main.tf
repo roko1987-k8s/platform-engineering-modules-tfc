@@ -1,10 +1,19 @@
 locals {
-  workspace          = "workspaces/${var.team_id}/terraform/aws/${var.environment}/eks-${format("%02d", var.sequence)}"
-  team               = var.team_id
-  environment        = var.environment
-  deployment         = "eks-${format("%02d", var.sequence)}"
-  catalog_path       = "${path.module}/../eks.yaml"
-  catalog            = yamldecode(file(local.catalog_path)).eks
+  workspace        = "workspaces/${var.team_id}/terraform/aws/${var.environment}/eks-${format("%02d", var.sequence)}"
+  team             = var.team_id
+  environment      = var.environment
+  deployment       = "eks-${format("%02d", var.sequence)}"
+  catalog_path     = "${path.module}/../eks.yaml"
+  catalog_document = yamldecode(file(local.catalog_path)).eks
+  # schema_version 2 separates profiles per environment. Submodules, variable
+  # validations and outputs keep consuming the v1 shape for the selected one.
+  catalog = merge(
+    { for key, value in local.catalog_document : key => value if key != "environments" },
+    {
+      schema_version = 1
+      nodegroups     = local.catalog_document.environments[var.environment].nodegroups
+    },
+  )
   requested_profiles = { system = var.system_size, user = var.user_size }
 
   requested_counts = var.node_counts
