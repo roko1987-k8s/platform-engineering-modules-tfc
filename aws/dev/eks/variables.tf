@@ -72,14 +72,21 @@ variable "proposal_mode" {
 variable "reviewed_execution" {
   description = "Typed future execution input, not an approval. Design still blocks resource creation when supplied."
   type = object({
-    aws_account_id        = string
-    resource_prefix       = string
-    kms_key_arn           = string
-    log_retention_days    = number
-    release_versions      = map(string)
-    root_volumes          = map(object({ size_gib = number, kms_key_arn = string }))
-    tags                  = map(string)
-    networking            = object({ conformity = string, vpc_id = string, cluster_subnet_ids = list(string), node_subnet_ids = list(string), connectivity = object({ approval_reference = string, routing_reviewed = bool, private_api_reachable = bool, dns_reviewed = bool, registry_sts_eks_reachable = bool }) })
+    aws_account_id     = string
+    resource_prefix    = string
+    kms_key_arn        = string
+    log_retention_days = number
+    release_versions   = map(string)
+    root_volumes       = map(object({ size_gib = number, kms_key_arn = string }))
+    tags               = map(string)
+    # Single Networking object; validated by modules/aws/networking.
+    networking = object({
+      vpc_cidr             = string
+      cluster_subnet_cidrs = list(string)
+      node_subnet_cidrs    = list(string)
+      approval_reference   = string
+      connectivity         = optional(object({ routing_reviewed = bool, private_api_reachable = bool, dns_reviewed = bool, registry_sts_eks_reachable = bool }))
+    })
     security_group_rules  = map(object({ relation = string, source = string, destination = string, protocol = string, from_port = number, to_port = number, approval_reference = string }))
     external_destinations = map(string)
     pod_identity_roles    = map(object({ policy_json = string }))
