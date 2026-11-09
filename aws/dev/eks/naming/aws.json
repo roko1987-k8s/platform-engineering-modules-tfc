@@ -12,7 +12,8 @@
     "eks": "eks",
     "vpc": "vpc",
     "infra": "infra",
-    "user": "user"
+    "user": "user",
+    "s3": "s3"
   },
   "sequence_width": 2
 }
