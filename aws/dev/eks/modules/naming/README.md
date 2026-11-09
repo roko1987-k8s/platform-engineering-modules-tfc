@@ -6,8 +6,8 @@ Computes `<resource><regionCode><teamId><environment><sequence>` from a trusted 
 
 The approved us-east-1 code is ue1, not use1. Existing environment codes dev/cert/prod are retained. Prefixes eks/vpc/infra/user follow the approved convention. Sequence is an explicit positive integer formatted to at least two digits: 1 -> 01, 10 -> 10, 100 -> 100. It is never silently truncated; uniqueness/allocation of a sequence is a separate caller responsibility. This module does not claim a name is reserved or collision-free across workspaces.
 
-Inputs: policy, region, environment, team_id, sequence. Output: names map. Rejects unknown region/environment, malformed team/sequence, duplicate naming codes, malformed policy and names exceeding the existing EKS module's limit. Naming does not authenticate users or grant permissions.
+Inputs: policy, region, environment, team_id, sequence and optional subnet_counts ({cluster, node}, default zero). Outputs: names map and subnet_names ({cluster, node} lists named `<names.vpc>-<role>-NN`, in CIDR order). Rejects unknown region/environment, malformed team/sequence, duplicate naming codes, malformed policy and names exceeding the existing EKS module's limit. Naming does not authenticate users or grant permissions.
 
-The EKS template consumes names.eks. names.vpc/infra/user are review outputs only; the existing Networking module neither creates nor renames VPCs/subnets. Security Groups keep their existing naming and rules unchanged.
+The EKS composition consumes names.eks, and the Networking module creates the VPC and subnets named by names.vpc and subnet_names. names.infra/user remain review outputs. Security Groups keep their existing naming and rules unchanged.
 
 Operational validation is documented in the repository root README. Temporary tests run outside the published repository. No runtime dependency is added to Backstage or either agent.

@@ -7,7 +7,7 @@ fixtures, ejemplos de laboratorio ni resultados internos de pruebas.
 ## Componentes operativos
 
 - `aws/dev/main.tf`: plantilla principal EKS con tokens; requiere renderizado.
-- `aws/dev/eks.yaml`: catálogo autorizado; Networking continúa pendiente.
+- `aws/dev/eks.yaml`: catálogo autorizado; Networking continúa pendiente (Terraform crea VPC/subnets cuando Networking asigne los CIDR; ver `aws/dev/eks/README.md`).
 - `aws/dev/eks/modules/`: ocho módulos de la composición EKS, incluido naming.
 - `aws/dev/eks/naming/aws.json`: política que el generador incorpora al workspace.
 - `aws/dev/eks/tools/render-eks-pure.cjs`: renderizado en memoria, sin I/O ni procesos.

@@ -101,6 +101,41 @@ revisión separada de su fuente y pins; no se implementa un fallback ni se modif
 Orchestrator, Terraform Agent o Backstage en esta tarea.
 
 
+## Networking: VPC y subnets creadas por Terraform
+
+El módulo `modules/aws/networking` crea la VPC y las subnets privadas; no
+administra Security Groups (los de EKS pertenecen al módulo `security-groups`). En la composición, la entrada única es
+`reviewed_execution.networking` (se mantiene dentro de `reviewed_execution` porque
+el Terraform Agent verifica el conjunto exacto de variables de esta raíz):
+
+```hcl
+networking = {
+  vpc_cidr             = "<asignado por Networking>"
+  cluster_subnet_cidrs = ["<asignado>", "<asignado>"]
+  node_subnet_cidrs    = ["<asignado>", "<asignado>"]
+  approval_reference   = "<ticket de aprobación>"
+  connectivity         = null # se atestigua cuando la VPC ya existe
+}
+```
+
+- Región: `var.region`, validada contra `aws/dev/eks.yaml`. El provider heredado
+  y todas las AZ deben pertenecer a ella. Las subnets se reparten de forma
+  determinista en al menos dos AZ (nombres ordenados, subnet `i` → zona `i mod n`).
+- Nombres: `module.naming` genera `names.vpc` y `subnet_names`
+  (`<names.vpc>-cluster-NN`, `<names.vpc>-node-NN`). Los tags `Team`,
+  `ApplicationCode` y `Environment` salen de las entradas autorizadas y
+  prevalecen sobre los tags revisados.
+- Gate en dos etapas, sin dependencia circular: con los CIDR aprobados y la
+  referencia de aprobación se crean la VPC y las subnets. IAM, security groups,
+  EKS, add-ons y node groups esperan a que `connectivity` esté atestiguada
+  (`check "connectivity_review"` avisa con `CONNECTIVITY_PENDING`).
+  Las salidas `proposed_subnet_names` y `networking_status` reflejan ese estado.
+- `proposal_mode` sigue aceptando solo `DESIGN_WITHOUT_AWS_ACCOUNT`, así que los
+  módulos AWS siguen con cero instancias y `NETWORKING_PENDING` bloquea el plan.
+- No se crean IGW, NAT Gateway ni VPC endpoints: la salida hacia ECR, S3, STS y
+  EKS es una decisión arquitectónica pendiente (ver
+  `modules/aws/networking/README.md`). No se incorporan CIDR ficticios.
+
 ## Composición consumible y workspace de un archivo
 
 La raíz de `aws/dev/eks/` expone una composición Terraform. Reutiliza los módulos

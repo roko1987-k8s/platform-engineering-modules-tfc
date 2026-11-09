@@ -34,16 +34,17 @@ locals {
 
   requested_counts = @@COUNTS@@
 
-  # Networking owns completion and approval. No CIDR or invented segment exists.
+  # Networking assigns and approves the CIDRs. No CIDR or invented segment exists.
   networking = {
-    conformity         = "pending"
-    option_id          = null
-    vpc_id             = null
-    cluster_subnet_ids = null
-    node_subnet_ids    = null
-    connectivity       = null
+    conformity           = "pending"
+    option_id            = null
+    vpc_cidr             = null
+    cluster_subnet_cidrs = null
+    node_subnet_cidrs    = null
+    approval_reference   = null
+    connectivity         = null
   }
-  networking_ready = local.networking.conformity == "approved" && local.catalog.networking.conformity == "approved" && local.networking.vpc_id != null && local.networking.cluster_subnet_ids != null && local.networking.node_subnet_ids != null && local.networking.option_id != null && local.networking.connectivity != null
+  networking_ready = local.networking.conformity == "approved" && local.catalog.networking.conformity == "approved" && local.networking.vpc_cidr != null && local.networking.cluster_subnet_cidrs != null && local.networking.node_subnet_cidrs != null && local.networking.approval_reference != null && local.networking.option_id != null && local.networking.connectivity != null
 
   selections = {
     for role, size in local.requested_profiles : role => {
@@ -74,14 +75,19 @@ resource "terraform_data" "networking_gate" {
 provider "aws" { region = one(local.catalog.cluster.allowed_regions) }
 
 module "networking" {
-  source             = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/networking?ref=@@MODULE_SHA@@"
-  count              = local.networking_ready ? 1 : 0
-  vpc_id             = terraform_data.networking_gate.output.networking.vpc_id
-  cluster_subnet_ids = terraform_data.networking_gate.output.networking.cluster_subnet_ids
-  node_subnet_ids    = terraform_data.networking_gate.output.networking.node_subnet_ids
-  conformity         = terraform_data.networking_gate.output.networking.conformity
-  connectivity       = terraform_data.networking_gate.output.networking.connectivity
-  depends_on         = [terraform_data.networking_gate]
+  source       = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/networking?ref=@@MODULE_SHA@@"
+  count        = local.networking_ready ? 1 : 0
+  name         = module.naming.names.vpc
+  subnet_names = module.naming.subnet_names
+  region       = one(local.catalog.cluster.allowed_regions)
+  networking = {
+    vpc_cidr             = terraform_data.networking_gate.output.networking.vpc_cidr
+    cluster_subnet_cidrs = terraform_data.networking_gate.output.networking.cluster_subnet_cidrs
+    node_subnet_cidrs    = terraform_data.networking_gate.output.networking.node_subnet_cidrs
+    approval_reference   = terraform_data.networking_gate.output.networking.approval_reference
+    connectivity         = terraform_data.networking_gate.output.networking.connectivity
+  }
+  depends_on = [terraform_data.networking_gate]
 }
 module "iam" {
   source     = "git::https://github.com/roko1987-k8s/platform-engineering-modules-tfc.git//aws/dev/eks/modules/aws/iam?ref=@@MODULE_SHA@@"
@@ -153,8 +159,12 @@ module "naming" {
   team_id     = local.team
   environment = local.environment
   sequence    = @@SEQUENCE@@
+  subnet_counts = {
+    cluster = try(length(local.networking.cluster_subnet_cidrs), 0)
+    node    = try(length(local.networking.node_subnet_cidrs), 0)
+  }
 }
 output "proposed_names" {
   value       = module.naming.names
-  description = "Names for review only; no VPC or subnet is created or renamed."
+  description = "Names for review only; this draft creates no VPC or subnet."
 }
