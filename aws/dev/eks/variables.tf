@@ -62,35 +62,41 @@ variable "node_counts" {
   }
 }
 variable "proposal_mode" {
-  type    = string
-  default = "DESIGN_WITHOUT_AWS_ACCOUNT"
+  description = "DESIGN_WITHOUT_AWS_ACCOUNT (default, blocked), NETWORKING_ONLY (VPC/subnets/egress only) or EKS_CLUSTER (networking plus cluster). Execution still requires the Terraform Agent's independent authorization."
+  type        = string
+  default     = "DESIGN_WITHOUT_AWS_ACCOUNT"
   validation {
-    condition     = var.proposal_mode == "DESIGN_WITHOUT_AWS_ACCOUNT"
-    error_message = "Only design is supported; this interface does not authorize execution."
+    condition     = contains(["DESIGN_WITHOUT_AWS_ACCOUNT", "NETWORKING_ONLY", "EKS_CLUSTER"], var.proposal_mode)
+    error_message = "proposal_mode must be DESIGN_WITHOUT_AWS_ACCOUNT, NETWORKING_ONLY or EKS_CLUSTER."
   }
 }
 variable "reviewed_execution" {
-  description = "Typed future execution input, not an approval. Design still blocks resource creation when supplied."
+  description = "Reviewed execution inputs, not an approval. NETWORKING_ONLY needs only aws_account_id and networking; EKS_CLUSTER also needs resource_prefix, kms_key_arn, log_retention_days and root_volumes."
   type = object({
-    aws_account_id     = string
-    resource_prefix    = string
-    kms_key_arn        = string
-    log_retention_days = number
-    release_versions   = map(string)
-    root_volumes       = map(object({ size_gib = number, kms_key_arn = string }))
-    tags               = map(string)
+    aws_account_id = string
     # Single Networking object; validated by modules/aws/networking.
-    networking = object({
+    networking = optional(object({
       vpc_cidr             = string
+      public_subnet_cidrs  = list(string)
       cluster_subnet_cidrs = list(string)
       node_subnet_cidrs    = list(string)
       approval_reference   = string
       connectivity         = optional(object({ routing_reviewed = bool, private_api_reachable = bool, dns_reviewed = bool, registry_sts_eks_reachable = bool }))
-    })
-    security_group_rules  = map(object({ relation = string, source = string, destination = string, protocol = string, from_port = number, to_port = number, approval_reference = string }))
-    external_destinations = map(string)
-    pod_identity_roles    = map(object({ policy_json = string }))
-    addons                = map(object({ version = string, ownership_approved = bool, configuration_values = optional(string), service_account_role_arn = optional(string), pod_identity_associations = optional(map(string), {}) }))
+    }))
+    resource_prefix       = optional(string)
+    kms_key_arn           = optional(string)
+    log_retention_days    = optional(number)
+    release_versions      = optional(map(string), {})
+    root_volumes          = optional(map(object({ size_gib = number, kms_key_arn = string })))
+    tags                  = optional(map(string), {})
+    security_group_rules  = optional(map(object({ relation = string, source = string, destination = string, protocol = string, from_port = number, to_port = number, approval_reference = string })), {})
+    external_destinations = optional(map(string), {})
+    pod_identity_roles    = optional(map(object({ policy_json = string })), {})
+    addons                = optional(map(object({ version = string, ownership_approved = bool, configuration_values = optional(string), service_account_role_arn = optional(string), pod_identity_associations = optional(map(string), {}) })), {})
   })
   default = null
+  validation {
+    condition     = var.reviewed_execution == null || can(regex("^[0-9]{12}$", var.reviewed_execution.aws_account_id))
+    error_message = "aws_account_id must be the 12-digit approved target account."
+  }
 }

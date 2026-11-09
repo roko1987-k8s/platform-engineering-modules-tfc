@@ -12,7 +12,7 @@ locals {
   }
   # Subnets derive from the VPC name so they stay grouped with their network.
   subnet_names = {
-    for role in ["cluster", "node"] : role => (
+    for role in ["public", "cluster", "node"] : role => (
       local.names.vpc == null ? [] :
       [for i in range(var.subnet_counts[role]) : format("%s-%s-%02d", local.names.vpc, role, i + 1)]
     )
