@@ -60,6 +60,36 @@ backend=false y lockfile=readonly, sin AWS ni descargas. Pruebas adicionales deb
 permanecer fuera del repositorio publicable. No cambiar versiones o lockfiles
 para resolver un fallo de validación.
 
+### Resultado de la validación offline S3
+
+Según los resultados comunicados por el responsable, la validación del módulo
+S3 y su bootstrap se completó satisfactoriamente con Terraform 1.11.4 instalado
+de forma independiente y hashicorp/aws 6.71.0, descargado y autenticado por
+HashiCorp durante la preparación del entorno. La ejecución offline utilizó un
+mirror local y lockfiles temporales fuera del repositorio.
+
+| Comprobación | Resultado |
+|---|---|
+| `terraform fmt -check -recursive` | OK |
+| `terraform init -backend=false -lockfile=readonly` | OK |
+| `terraform validate` | OK |
+
+No se modificaron los archivos originales ni se realizaron conexiones a AWS o
+aprovisionamiento. El mirror y los lockfiles temporales no se incorporan al
+repositorio. Aún no existe un lockfile definitivo aprobado para el bootstrap o
+los workspaces consumidores.
+
+La restricción existente `~> 6.0` admite 6.71.0; no requiere modificar
+`versions.tf` ni la configuración del proveedor. Esta validación S3 es distinta
+del validador general descrito arriba, que continúa requiriendo un lockfile con
+AWS 6.20.0; no se ha actualizado esa herramienta.
+
+El resultado acredita la validación técnica offline con esas versiones. No
+verifica credenciales, permisos, existencia o propiedad del bucket, acceso al
+backend remoto, aislamiento de estados ni comportamiento en AWS. No equivale a
+una aprobación de despliegue. Se conserva el backend local independiente del
+bootstrap y el backend remoto separado de los consumidores.
+
 Antes de una instalación real: confirmar ausencia de infraestructura/estado previo,
 cuenta y disponibilidad/propiedad del nombre; revisar y fijar un lockfile de
 proveedor para el bootstrap, custodio del estado y autorización de despliegue.
