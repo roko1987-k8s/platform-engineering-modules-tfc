@@ -12,8 +12,8 @@ resource "aws_eks_cluster" "this" {
     bootstrap_cluster_creator_admin_permissions = false
   }
   vpc_config {
-    subnet_ids              = var.subnet_ids
-    security_group_ids      = [var.control_plane_security_group_id]
+    subnet_ids = var.subnet_ids
+    # No additional SG: EKS creates and manages the cluster security group.
     endpoint_private_access = true
     endpoint_public_access  = false
   }

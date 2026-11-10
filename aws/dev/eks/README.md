@@ -109,7 +109,7 @@ Orchestrator, Terraform Agent o Backstage en esta tarea.
 |---|---|---|
 | `DESIGN_WITHOUT_AWS_ACCOUNT` (default) | Nada; `NETWORKING_PENDING` bloquea el plan | — |
 | `NETWORKING_ONLY` | VPC, subnets públicas/privadas, IGW, NAT, rutas | `aws_account_id`, `networking` |
-| `EKS_CLUSTER` | Lo anterior + IAM del clúster, SG, EKS, add-ons, node groups | además `resource_prefix`. Opcionales (con `null` se usan los valores por defecto de AWS): `kms_key_arn`, `log_retention_days`, `root_volumes`, `release_versions`; `deletion_protection` (por defecto `true`) |
+| `EKS_CLUSTER` | Lo anterior + IAM del clúster, SG, EKS, add-ons, node groups | ningún dato adicional obligatorio: los nombres de IAM, node groups y clúster salen de `module.naming` (`resource_prefix` está obsoleto; si se declara debe coincidir con `names.eks`). Opcionales (con `null` se usan los valores por defecto de AWS): `kms_key_arn`, `log_retention_days`, `root_volumes`, `release_versions`; `deletion_protection` (por defecto `true`) |
 
 `networking` es el objeto único asignado por Networking:
 
@@ -128,13 +128,24 @@ networking = {
   conjunto exacto de variables de esta raíz.
 - Región: `var.region`, validada contra `aws/dev/eks.yaml`; provider y AZ deben
   pertenecer a ella. Reparto determinista en al menos dos AZ.
-- Nombres: `module.naming` (`names.vpc`, `subnet_names`). Tags `Team`,
+- Nombres: `module.naming` es la única fuente (`names.vpc`, `subnet_names` y
+  `names.eks` para el clúster, los roles IAM `<names.eks>-cluster|system|user` y
+  los node groups `<names.eks>-system|user`). Tags `Team`,
   `ApplicationCode` y `Environment` desde las entradas autorizadas, en el
   networking y en todos los recursos del clúster que admiten tags.
+- Security Groups: no se crea ningún SG propio. EKS crea y administra el
+  Cluster Security Group (`aws_eks_cluster.vpc_config[0].cluster_security_group_id`)
+  y lo asocia al control plane y a los nodos; los launch templates no definen SG.
+  Reglas administradas por EKS: ingress de todo el tráfico desde el propio SG
+  (API 443, kubelet 10250, DNS 53, tráfico node↔node) y egress a `0.0.0.0/0` por
+  el NAT. Las reglas aprobadas entre `system`, `user` y `control_plane` ya están
+  cubiertas y no crean recursos (`covered_by_eks`); solo los flujos hacia SG de
+  endpoints revisados (`external_destinations`) crean reglas egress en Terraform.
 - Gates (`terraform_data.networking_gate`, solo más estrictos):
   `NETWORKING_PENDING` sin red aprobada y `EXECUTION_INPUT_INCOMPLETE` en
-  `EKS_CLUSTER`. `terraform_data.account_gate` rechaza credenciales de otra
-  cuenta (`ACCOUNT_MISMATCH`).
+  `EKS_CLUSTER` si se declara un `resource_prefix` distinto de `names.eks`.
+  `terraform_data.account_gate` rechaza credenciales de otra cuenta
+  (`ACCOUNT_MISMATCH`).
 - Plan, Apply y post-Apply: el Plan cubre toda la composición sin atestación de
   conectividad (la VPC aún no existe). El Apply exige la aprobación independiente
   del Terraform Agent. `check "connectivity_review"` es la verificación post-Apply:

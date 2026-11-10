@@ -25,12 +25,9 @@ variable "node_role_arns" {
     error_message = "System/User require distinct EC2 IAM role ARNs."
   }
 }
-variable "security_group_ids" {
-  type = map(string)
-  validation {
-    condition     = var.use_cluster_security_group || try(var.security_group_ids.system != var.security_group_ids.user && alltrue([for role in ["system", "user"] : can(regex("^sg-([0-9a-f]{8}|[0-9a-f]{17})$", var.security_group_ids[role]))]), false)
-    error_message = "System/User require distinct explicit custom security group IDs."
-  }
+variable "cluster_security_group_id" {
+  description = "EKS cluster security group attached by EKS to the nodes (reported only)."
+  type        = string
 }
 variable "tags" {
   type = map(string)
@@ -63,9 +60,4 @@ variable "root_volumes" {
     condition     = var.root_volumes == null ? true : (toset(keys(var.root_volumes)) == toset(["system", "user"]) && alltrue([for v in values(var.root_volumes) : v.size_gib > 0 && floor(v.size_gib) == v.size_gib && can(regex("^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/[A-Za-z0-9-]+$", v.kms_key_arn))]))
     error_message = "Each role needs an explicit positive integer root size and approved customer KMS key ARN; AMI minimum size needs release-specific review."
   }
-}
-variable "use_cluster_security_group" {
-  description = "Attach the EKS cluster security group instead of the custom role SGs (no approved custom rules)."
-  type        = bool
-  default     = false
 }
