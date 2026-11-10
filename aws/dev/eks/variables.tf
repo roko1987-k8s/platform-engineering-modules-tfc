@@ -71,7 +71,7 @@ variable "proposal_mode" {
   }
 }
 variable "reviewed_execution" {
-  description = "Reviewed execution inputs, not an approval. NETWORKING_ONLY needs only aws_account_id and networking; EKS_CLUSTER also needs resource_prefix (KMS, log retention, root volumes and AMI release are optional; AWS defaults apply when null)."
+  description = "Reviewed execution inputs, not an approval. NETWORKING_ONLY needs only aws_account_id and networking; EKS_CLUSTER adds no mandatory input (KMS, log retention, root volumes and AMI release are optional; AWS defaults apply when null). Names come from module.naming."
   type = object({
     aws_account_id = string
     # Single Networking object; validated by modules/aws/networking.
@@ -83,6 +83,7 @@ variable "reviewed_execution" {
       approval_reference   = string
       connectivity         = optional(object({ routing_reviewed = bool, private_api_reachable = bool, dns_reviewed = bool, registry_sts_eks_reachable = bool }))
     }))
+    # Deprecated: names come from module.naming; if set it must equal names.eks.
     resource_prefix       = optional(string)
     kms_key_arn           = optional(string)
     log_retention_days    = optional(number)

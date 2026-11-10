@@ -8,6 +8,6 @@ The approved us-east-1 code is ue1, not use1. Existing environment codes dev/cer
 
 Inputs: policy, region, environment, team_id, sequence and optional subnet_counts ({public, cluster, node}, default zero). Outputs: names map and subnet_names ({public, cluster, node} lists named `<names.vpc>-<role>-NN`, in CIDR order). Rejects unknown region/environment, malformed team/sequence, duplicate naming codes, malformed policy and names exceeding the existing EKS module's limit. Naming does not authenticate users or grant permissions.
 
-The EKS composition consumes names.eks, and the Networking module creates the VPC and subnets named by names.vpc and subnet_names. names.infra/user remain review outputs. names.s3 is the team's state bucket name used to resolve the remote backend; this module never creates the bucket (aws/dev/s3/bootstrap does). Security Groups keep their existing naming and rules unchanged.
+The EKS composition consumes names.eks, and the Networking module creates the VPC and subnets named by names.vpc and subnet_names. names.infra/user remain review outputs. names.s3 is the team's state bucket name used to resolve the remote backend; this module never creates the bucket (aws/dev/s3/bootstrap does). No custom Security Group is created; the EKS cluster security group is named by AWS.
 
 Operational validation is documented in the repository root README. Temporary tests run outside the published repository. No runtime dependency is added to Backstage or either agent.

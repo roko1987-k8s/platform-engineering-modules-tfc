@@ -36,9 +36,6 @@ variable "subnet_ids" {
     error_message = "At least two validated subnets are required."
   }
 }
-variable "control_plane_security_group_id" {
-  type = string
-}
 variable "kms_key_arn" {
   description = "Approved customer KMS key ARN; null uses EKS default secrets encryption."
   type        = string

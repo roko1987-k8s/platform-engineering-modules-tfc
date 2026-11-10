@@ -1,5 +1,6 @@
-variable "name" {
-  type = string
+variable "cluster_security_group_id" {
+  description = "EKS-created cluster security group (aws_eks_cluster.vpc_config[0].cluster_security_group_id)."
+  type        = string
 }
 variable "vpc_id" {
   type = string

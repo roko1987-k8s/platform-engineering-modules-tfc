@@ -1,9 +1,8 @@
 resource "aws_launch_template" "role" {
   for_each    = var.selections
   name_prefix = "${var.cluster_name}-${each.key}-"
-  # Exactly one custom SG (EKS then does not attach its cluster SG); null lets EKS
-  # attach the cluster security group when no custom rules are approved.
-  vpc_security_group_ids = var.use_cluster_security_group ? null : [var.security_group_ids[each.key]]
+  # No vpc_security_group_ids or network_interfaces: EKS attaches its cluster
+  # security group to the nodes (any SG set here would replace it).
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {

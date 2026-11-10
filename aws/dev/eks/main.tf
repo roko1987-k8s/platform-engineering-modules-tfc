@@ -30,21 +30,19 @@ locals {
   networking_ready = try(local.execution && var.reviewed_execution != null && local.networking != null && trimspace(local.networking.approval_reference) != "", false)
   # Connectivity can only be attested once the VPC exists (no circular dependency).
   connectivity_ready = try(local.networking_ready && local.networking.connectivity.routing_reviewed && local.networking.connectivity.private_api_reachable && local.networking.connectivity.dns_reviewed && local.networking.connectivity.registry_sts_eks_reachable, false)
-  # Cluster-only inputs; NETWORKING_ONLY never requires EKS/IAM/KMS values.
-  # Lab phase: only the resource prefix is mandatory. KMS, log retention, root
-  # volumes and AMI release are optional; AWS defaults apply when they are null
-  # (EKS default secrets encryption, no control-plane log group, EBS encrypted with
-  # the AWS managed key and the AMI root size, latest AMI release for the version).
-  cluster_inputs_complete = try(var.reviewed_execution.resource_prefix != null && trimspace(var.reviewed_execution.resource_prefix) != "", false)
+  # Cluster-only inputs are optional: KMS, log retention, root volumes and AMI
+  # release use AWS defaults when null (EKS default secrets encryption, no
+  # control-plane log group, EBS encrypted with the AWS managed key and the AMI root
+  # size, latest AMI release for the version). Every name comes from module.naming;
+  # resource_prefix is deprecated and, when present, must equal the computed name.
+  declared_prefix       = try(var.reviewed_execution.resource_prefix, null)
+  prefix_matches_naming = local.declared_prefix == null ? true : trimspace(local.declared_prefix) == module.naming.names.eks
   # Without approved managed add-ons, EKS bootstraps its default vpc-cni,
   # kube-proxy and CoreDNS (vpc-cni then needs AmazonEKS_CNI_Policy on node roles).
   self_managed_networking_addons = length(try(var.reviewed_execution.addons, {})) == 0
-  # Without approved custom SG rules, nodes use the EKS cluster security group
-  # (node <-> control plane and egress through the NAT Gateway).
-  nodes_use_cluster_security_group = length(try(var.reviewed_execution.security_group_rules, {})) == 0
   # Plan covers the whole composition: connectivity of a VPC that does not exist
   # yet cannot be attested, so it is verified after Apply (check below), not here.
-  cluster_ready = local.cluster_mode && local.networking_ready && local.cluster_inputs_complete
+  cluster_ready = local.cluster_mode && local.networking_ready
 
   # Identity tags win over reviewed tags so they cannot be overridden. Applied to
   # networking and to every cluster resource that supports tags.
@@ -64,7 +62,7 @@ locals {
 }
 
 # A lifecycle precondition is a blocking error, unlike an advisory check block.
-# Preconditions use only variables and locals, so they are evaluated during plan
+# Preconditions use only variables, locals and pure naming, so they are evaluated during plan
 # and stop it before any change. Modules intentionally do not consume this
 # resource's output: a changed input would make their arguments unknown and force
 # replacement of networking or the cluster.
@@ -76,8 +74,8 @@ resource "terraform_data" "networking_gate" {
       error_message = "NETWORKING_PENDING: draft files may be reviewed; terraform plan/apply are blocked until Networking assigns and approves the VPC and subnet CIDRs."
     }
     precondition {
-      condition     = !local.cluster_mode || local.cluster_inputs_complete
-      error_message = "EXECUTION_INPUT_INCOMPLETE: EKS_CLUSTER requires resource_prefix."
+      condition     = !local.cluster_mode || local.prefix_matches_naming
+      error_message = "EXECUTION_INPUT_INCOMPLETE: resource_prefix is deprecated; names come from module.naming and a declared resource_prefix must equal the computed EKS name."
     }
   }
 }
@@ -122,35 +120,38 @@ check "connectivity_review" {
 module "iam" {
   source             = "./modules/aws/iam"
   count              = local.cluster_ready ? 1 : 0
-  name               = var.reviewed_execution.resource_prefix
+  name               = module.naming.names.eks
   pod_identity_roles = try(var.reviewed_execution.pod_identity_roles, {})
   tags               = local.network_tags
   node_cni_policy    = local.self_managed_networking_addons
 }
-module "security_groups" {
-  source                = "./modules/aws/security-groups"
-  count                 = local.cluster_ready ? 1 : 0
-  name                  = var.reviewed_execution.resource_prefix
-  vpc_id                = module.networking[0].vpc_id
-  tags                  = local.network_tags
-  rules                 = try(var.reviewed_execution.security_group_rules, {})
-  external_destinations = try(var.reviewed_execution.external_destinations, {})
-}
 module "eks" {
-  source                          = "./modules/aws/eks"
-  count                           = local.cluster_ready ? 1 : 0
-  name                            = module.naming.names.eks
-  catalog                         = local.catalog
-  kubernetes_version              = var.kubernetes_version
-  region                          = var.region
-  role_arn                        = module.iam[0].cluster_role_arn
-  subnet_ids                      = module.networking[0].cluster_subnet_ids
-  control_plane_security_group_id = module.security_groups[0].security_group_ids.control_plane
-  kms_key_arn                     = try(var.reviewed_execution.kms_key_arn, null)
-  log_retention_days              = try(var.reviewed_execution.log_retention_days, null)
-  bootstrap_self_managed_addons   = local.self_managed_networking_addons
-  deletion_protection             = try(var.reviewed_execution.deletion_protection, true)
-  tags                            = local.network_tags
+  source                        = "./modules/aws/eks"
+  count                         = local.cluster_ready ? 1 : 0
+  name                          = module.naming.names.eks
+  catalog                       = local.catalog
+  kubernetes_version            = var.kubernetes_version
+  region                        = var.region
+  role_arn                      = module.iam[0].cluster_role_arn
+  subnet_ids                    = module.networking[0].cluster_subnet_ids
+  kms_key_arn                   = try(var.reviewed_execution.kms_key_arn, null)
+  log_retention_days            = try(var.reviewed_execution.log_retention_days, null)
+  bootstrap_self_managed_addons = local.self_managed_networking_addons
+  deletion_protection           = try(var.reviewed_execution.deletion_protection, true)
+  tags                          = local.network_tags
+}
+# No custom security group: EKS creates the cluster SG and attaches it to the
+# control plane and to the managed nodes. Only approved additional rules are
+# added on it (none today: EKS-managed rules cover API, kubelet, DNS and egress).
+# Dependency is one-way (eks -> rules), so there is no cycle with the node groups.
+module "security_groups" {
+  source                    = "./modules/aws/security-groups"
+  count                     = local.cluster_ready ? 1 : 0
+  cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id
+  vpc_id                    = module.networking[0].vpc_id
+  tags                      = local.network_tags
+  rules                     = try(var.reviewed_execution.security_group_rules, {})
+  external_destinations     = try(var.reviewed_execution.external_destinations, {})
 }
 module "foundation_addons" {
   source       = "./modules/aws/addons"
@@ -167,13 +168,12 @@ module "nodegroups" {
   catalog            = local.catalog
   subnet_ids         = module.networking[0].node_subnet_ids
   node_role_arns     = module.iam[0].node_role_arns
-  security_group_ids = module.security_groups[0].security_group_ids
   selections         = local.selections
   root_volumes       = try(var.reviewed_execution.root_volumes, null)
 
-  use_cluster_security_group = local.nodes_use_cluster_security_group
-  tags                       = local.network_tags
-  depends_on                 = [module.foundation_addons]
+  cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id
+  tags                      = local.network_tags
+  depends_on                = [module.foundation_addons]
 }
 module "dns_addon" {
   source       = "./modules/aws/addons"
