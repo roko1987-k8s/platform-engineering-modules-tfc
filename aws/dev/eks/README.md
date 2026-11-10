@@ -109,7 +109,7 @@ Orchestrator, Terraform Agent o Backstage en esta tarea.
 |---|---|---|
 | `DESIGN_WITHOUT_AWS_ACCOUNT` (default) | Nada; `NETWORKING_PENDING` bloquea el plan | — |
 | `NETWORKING_ONLY` | VPC, subnets públicas/privadas, IGW, NAT, rutas | `aws_account_id`, `networking` |
-| `EKS_CLUSTER` | Lo anterior + IAM del clúster, SG, EKS, add-ons, node groups | además `resource_prefix`, `kms_key_arn`, `log_retention_days`, `root_volumes` y `networking.connectivity` atestiguada |
+| `EKS_CLUSTER` | Lo anterior + IAM del clúster, SG, EKS, add-ons, node groups | además `resource_prefix`. Opcionales (con `null` se usan los valores por defecto de AWS): `kms_key_arn`, `log_retention_days`, `root_volumes`, `release_versions`; `deletion_protection` (por defecto `true`) |
 
 `networking` es el objeto único asignado por Networking:
 
@@ -129,11 +129,17 @@ networking = {
 - Región: `var.region`, validada contra `aws/dev/eks.yaml`; provider y AZ deben
   pertenecer a ella. Reparto determinista en al menos dos AZ.
 - Nombres: `module.naming` (`names.vpc`, `subnet_names`). Tags `Team`,
-  `ApplicationCode` y `Environment` desde las entradas autorizadas.
+  `ApplicationCode` y `Environment` desde las entradas autorizadas, en el
+  networking y en todos los recursos del clúster que admiten tags.
 - Gates (`terraform_data.networking_gate`, solo más estrictos):
-  `NETWORKING_PENDING` sin red aprobada, `CONNECTIVITY_PENDING` y
-  `EXECUTION_INPUT_INCOMPLETE` en `EKS_CLUSTER`. `terraform_data.account_gate`
-  rechaza credenciales de otra cuenta (`ACCOUNT_MISMATCH`).
+  `NETWORKING_PENDING` sin red aprobada y `EXECUTION_INPUT_INCOMPLETE` en
+  `EKS_CLUSTER`. `terraform_data.account_gate` rechaza credenciales de otra
+  cuenta (`ACCOUNT_MISMATCH`).
+- Plan, Apply y post-Apply: el Plan cubre toda la composición sin atestación de
+  conectividad (la VPC aún no existe). El Apply exige la aprobación independiente
+  del Terraform Agent. `check "connectivity_review"` es la verificación post-Apply:
+  advierte `CONNECTIVITY_PENDING` hasta que Networking atestigua, con evidencia,
+  routing, API privada, DNS y alcance a ECR/S3/STS/EKS sobre la VPC creada.
 - Transición segura: los módulos reciben valores de variables/locals, no del
   output del gate, y no dependen de él con `depends_on`. Así un cambio de modo o
   de `reviewed_execution` no vuelve desconocidos atributos ForceNew (CIDR, AZ) y

@@ -28,7 +28,7 @@ variable "node_role_arns" {
 variable "security_group_ids" {
   type = map(string)
   validation {
-    condition     = try(var.security_group_ids.system != var.security_group_ids.user && alltrue([for role in ["system", "user"] : can(regex("^sg-([0-9a-f]{8}|[0-9a-f]{17})$", var.security_group_ids[role]))]), false)
+    condition     = var.use_cluster_security_group || try(var.security_group_ids.system != var.security_group_ids.user && alltrue([for role in ["system", "user"] : can(regex("^sg-([0-9a-f]{8}|[0-9a-f]{17})$", var.security_group_ids[role]))]), false)
     error_message = "System/User require distinct explicit custom security group IDs."
   }
 }
@@ -42,7 +42,7 @@ variable "selections" {
     error_message = "Exactly System and User must be specified independently."
   }
   validation {
-    condition     = alltrue([for role, g in var.selections : try(contains(keys(var.catalog.nodegroups[role].sizes), g.size) && var.catalog.nodegroups[role].sizes[g.size] != null && contains(var.catalog.nodegroups[role].allowed_capacity_types, g.capacity_type) && alltrue([for n in [g.minimum, g.desired, g.maximum] : n >= var.catalog.nodegroups[role].min_count && n <= var.catalog.nodegroups[role].max_count && floor(n) == n]) && var.catalog.nodegroups[role].min_count >= 1 && floor(var.catalog.nodegroups[role].min_count) == var.catalog.nodegroups[role].min_count && floor(var.catalog.nodegroups[role].max_count) == var.catalog.nodegroups[role].max_count && g.minimum <= g.desired && g.desired <= g.maximum && trimspace(g.release_version) != "", false)])
+    condition     = alltrue([for role, g in var.selections : try(contains(keys(var.catalog.nodegroups[role].sizes), g.size) && var.catalog.nodegroups[role].sizes[g.size] != null && contains(var.catalog.nodegroups[role].allowed_capacity_types, g.capacity_type) && alltrue([for n in [g.minimum, g.desired, g.maximum] : n >= var.catalog.nodegroups[role].min_count && n <= var.catalog.nodegroups[role].max_count && floor(n) == n]) && var.catalog.nodegroups[role].min_count >= 1 && floor(var.catalog.nodegroups[role].min_count) == var.catalog.nodegroups[role].min_count && floor(var.catalog.nodegroups[role].max_count) == var.catalog.nodegroups[role].max_count && g.minimum <= g.desired && g.desired <= g.maximum && (g.release_version == null || trimspace(coalesce(g.release_version, " ")) != ""), false)])
     error_message = "Profile, capacity, explicit AMI release and ordered integer quantities must satisfy the catalogue per role."
   }
   validation {
@@ -56,10 +56,16 @@ variable "selections" {
 }
 
 variable "root_volumes" {
-  description = "Approved encrypted AL2023 root volume parameters, supplied independently for both roles."
+  description = "Approved encrypted AL2023 root volume parameters per role; null keeps EBS encryption with the AWS managed key and the AMI root size."
   type        = map(object({ size_gib = number, kms_key_arn = string }))
+  default     = null
   validation {
-    condition     = toset(keys(var.root_volumes)) == toset(["system", "user"]) && alltrue([for v in values(var.root_volumes) : v.size_gib > 0 && floor(v.size_gib) == v.size_gib && can(regex("^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/[A-Za-z0-9-]+$", v.kms_key_arn))])
+    condition     = var.root_volumes == null ? true : (toset(keys(var.root_volumes)) == toset(["system", "user"]) && alltrue([for v in values(var.root_volumes) : v.size_gib > 0 && floor(v.size_gib) == v.size_gib && can(regex("^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/[A-Za-z0-9-]+$", v.kms_key_arn))]))
     error_message = "Each role needs an explicit positive integer root size and approved customer KMS key ARN; AMI minimum size needs release-specific review."
   }
+}
+variable "use_cluster_security_group" {
+  description = "Attach the EKS cluster security group instead of the custom role SGs (no approved custom rules)."
+  type        = bool
+  default     = false
 }
