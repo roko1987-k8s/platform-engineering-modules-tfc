@@ -71,7 +71,7 @@ variable "proposal_mode" {
   }
 }
 variable "reviewed_execution" {
-  description = "Reviewed execution inputs, not an approval. NETWORKING_ONLY needs only aws_account_id and networking; EKS_CLUSTER also needs resource_prefix, kms_key_arn, log_retention_days and root_volumes."
+  description = "Reviewed execution inputs, not an approval. NETWORKING_ONLY needs only aws_account_id and networking; EKS_CLUSTER also needs resource_prefix (KMS, log retention, root volumes and AMI release are optional; AWS defaults apply when null)."
   type = object({
     aws_account_id = string
     # Single Networking object; validated by modules/aws/networking.
@@ -92,6 +92,7 @@ variable "reviewed_execution" {
     security_group_rules  = optional(map(object({ relation = string, source = string, destination = string, protocol = string, from_port = number, to_port = number, approval_reference = string })), {})
     external_destinations = optional(map(string), {})
     pod_identity_roles    = optional(map(object({ policy_json = string })), {})
+    deletion_protection   = optional(bool, true)
     addons                = optional(map(object({ version = string, ownership_approved = bool, configuration_values = optional(string), service_account_role_arn = optional(string), pod_identity_associations = optional(map(string), {}) })), {})
   })
   default = null

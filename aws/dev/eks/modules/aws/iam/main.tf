@@ -4,7 +4,8 @@ locals {
     cluster = { Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "eks.amazonaws.com" } }] }
     nodes   = { Version = "2012-10-17", Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "ec2.amazonaws.com" } }] }
   }
-  node_policies = toset(["AmazonEKSWorkerNodePolicy", "AmazonEC2ContainerRegistryPullOnly"])
+  # AmazonEKS_CNI_Policy only for the EKS-bootstrapped (self-managed) vpc-cni.
+  node_policies = toset(concat(["AmazonEKSWorkerNodePolicy", "AmazonEC2ContainerRegistryPullOnly"], var.node_cni_policy ? ["AmazonEKS_CNI_Policy"] : []))
 }
 resource "aws_iam_role" "cluster" {
   name               = "${var.name}-cluster"

@@ -1,14 +1,16 @@
 resource "aws_launch_template" "role" {
   for_each    = var.selections
   name_prefix = "${var.cluster_name}-${each.key}-"
-  # Exactly one custom SG. EKS does not attach its cluster SG in this mode.
-  vpc_security_group_ids = [var.security_group_ids[each.key]]
+  # Exactly one custom SG (EKS then does not attach its cluster SG); null lets EKS
+  # attach the cluster security group when no custom rules are approved.
+  vpc_security_group_ids = var.use_cluster_security_group ? null : [var.security_group_ids[each.key]]
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      encrypted             = true
-      kms_key_id            = var.root_volumes[each.key].kms_key_arn
-      volume_size           = var.root_volumes[each.key].size_gib
+      encrypted = true
+      # null: AWS managed EBS key and the AMI's root volume size.
+      kms_key_id            = try(var.root_volumes[each.key].kms_key_arn, null)
+      volume_size           = try(var.root_volumes[each.key].size_gib, null)
       volume_type           = "gp3"
       delete_on_termination = true
     }

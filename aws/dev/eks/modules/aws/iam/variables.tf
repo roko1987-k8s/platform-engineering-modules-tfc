@@ -17,3 +17,8 @@ variable "pod_identity_roles" {
     error_message = "Workload policies need explicit actions and resources; no wildcard actions or global resources."
   }
 }
+variable "node_cni_policy" {
+  description = "Attach AmazonEKS_CNI_Policy to node roles for the EKS default (self-managed) vpc-cni."
+  type        = bool
+  default     = false
+}
