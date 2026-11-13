@@ -109,7 +109,8 @@ def access_tests():
                 f'{tagst}.Condition.StringEquals["aws:RequestTag/Operation"] == "{op}"',
                 f'contains({trust}.Action, "sts:SetSourceIdentity") && !contains(flatten([{tagst}.Action]), "sts:SetSourceIdentity")',
                 f'{trust}.Condition.Null["sts:SourceIdentity"] == "false"',
-                f'{trust}.Condition.StringLike["sts:RoleSessionName"] == "adp-{team}-{wid}-{op}*"',
+                f'[for s in jsondecode({role}.assume_role_policy).Statement : s if s.Sid == "RequireSessionName"][0].Condition.StringNotLike["sts:RoleSessionName"] == "adp-{team}-{wid}-{op}*"',
+                f'keys({trust}.Condition) == ["Null"]',
                 f'alltrue([for s in {policy}.Statement : length(regexall("\\\\*", jsonencode(s.Resource))) == 0 if s.Effect == "Allow"])',
                 f'alltrue([for s in {policy}.Statement : alltrue([for a in flatten([s.Action]) : !strcontains(a, "*")]) if s.Effect == "Allow"])',
                 f'anytrue([for s in {policy}.Statement : s.Effect == "Deny" && s.Action == "s3:*"])',
@@ -278,9 +279,19 @@ def trust_allows(trust, principal, ctx):
     if 'sts:SourceIdentity' in ctx:
         actions.append('sts:SetSourceIdentity')
     for action in actions:
+        # Conservative per-action request context (found in a real AssumeRole test):
+        # SetSourceIdentity carries only sts:SourceIdentity, TagSession only the tag
+        # keys; AssumeRole carries everything.
+        if action == 'sts:SetSourceIdentity':
+            view = {k: v for k, v in ctx.items() if k == 'sts:SourceIdentity'}
+        elif action == 'sts:TagSession':
+            view = {k: v for k, v in ctx.items()
+                    if k.startswith('aws:RequestTag/') or k in ('aws:TagKeys', 'sts:TransitiveTagKeys')}
+        else:
+            view = ctx
         relevant = [s for s in trust['Statement']
                     if s['Principal'].get('AWS') == principal and action in _as_list(s['Action'])
-                    and _condition(s.get('Condition'), ctx)]
+                    and _condition(s.get('Condition'), view)]
         if any(s['Effect'] == 'Deny' for s in relevant) or not any(s['Effect'] == 'Allow' for s in relevant):
             return False
     return True

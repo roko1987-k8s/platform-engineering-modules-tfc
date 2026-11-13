@@ -19,10 +19,15 @@ locals {
         Effect    = "Allow"
         Principal = { AWS = var.agent_principal_arn }
         Action    = ["sts:AssumeRole", "sts:SetSourceIdentity"]
-        Condition = {
-          Null       = { "sts:SourceIdentity" = "false" }
-          StringLike = { "sts:RoleSessionName" = "adp-s3-backend-control*" }
-        }
+        # Only sts:SourceIdentity (also evaluated for sts:SetSourceIdentity).
+        Condition = { Null = { "sts:SourceIdentity" = "false" } }
+      },
+      {
+        Sid       = "RequireSessionName"
+        Effect    = "Deny"
+        Principal = { AWS = var.agent_principal_arn }
+        Action    = "sts:AssumeRole"
+        Condition = { StringNotLike = { "sts:RoleSessionName" = "adp-s3-backend-control*" } }
       },
       {
         Sid       = "TagControlSession"
