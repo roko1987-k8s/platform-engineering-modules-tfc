@@ -96,6 +96,7 @@ def access_tests():
         for key, op in OPS.items():
             role, policy = f'aws_iam_role.this["{key}"]', f'jsondecode(output.policies["{key}"])'
             trust = f'jsondecode({role}.assume_role_policy).Statement[0]'
+            tagst = f'[for s in jsondecode({role}.assume_role_policy).Statement : s if s.Sid == "TagWorkspaceSession"][0]'
             checks += [
                 f'{role}.name == "{b}-s3backend-{op}"',
                 f'{role}.path == "/adp/s3-backend/{op}/"',
@@ -103,9 +104,10 @@ def access_tests():
                 f'{role}.max_session_duration == 3600',
                 f'{role}.tags.Bucket == "{b}" && {role}.tags.Team == "{team}" && {role}.tags.Instance == "{wid}" && {role}.tags.Operation == "{op}"',
                 f'{trust}.Principal.AWS == "{AGENT}"',
-                f'{trust}.Condition.StringEquals["aws:RequestTag/Instance"] == "{wid}"',
-                f'{trust}.Condition.StringEquals["aws:RequestTag/Team"] == "{team}"',
-                f'{trust}.Condition.StringEquals["aws:RequestTag/Operation"] == "{op}"',
+                f'{tagst}.Condition.StringEquals["aws:RequestTag/Instance"] == "{wid}"',
+                f'{tagst}.Condition.StringEquals["aws:RequestTag/Team"] == "{team}"',
+                f'{tagst}.Condition.StringEquals["aws:RequestTag/Operation"] == "{op}"',
+                f'contains({trust}.Action, "sts:SetSourceIdentity") && !contains(flatten([{tagst}.Action]), "sts:SetSourceIdentity")',
                 f'{trust}.Condition.Null["sts:SourceIdentity"] == "false"',
                 f'{trust}.Condition.StringLike["sts:RoleSessionName"] == "adp-{team}-{wid}-{op}*"',
                 f'alltrue([for s in {policy}.Statement : length(regexall("\\\\*", jsonencode(s.Resource))) == 0 if s.Effect == "Allow"])',
@@ -224,6 +226,13 @@ def _condition(block, ctx):
                 if not present or not set(_as_list(actual)) & set(_as_list(expected)):
                     return False
                 continue
+            if base in ('StringNotEquals', 'StringNotLike'):
+                # Negated operators match when the key is absent (IAM semantics).
+                if present:
+                    match = (lambda a, e: a == e) if base == 'StringNotEquals' else fnmatch.fnmatchcase
+                    if any(match(a, e) for a in _as_list(actual) for e in _as_list(expected)):
+                        return False
+                continue
             if not present:
                 return False
             if base in ('StringEquals', 'ArnEquals'):
@@ -260,11 +269,21 @@ def effective(inline, boundary, action, resource, ctx, tags):
 
 
 def trust_allows(trust, principal, ctx):
-    for s in trust['Statement']:
-        if s['Effect'] == 'Allow' and s['Principal'].get('AWS') == principal and \
-                'sts:AssumeRole' in _as_list(s['Action']) and _condition(s.get('Condition'), ctx):
-            return True
-    return False
+    """One AssumeRole call is authorized per requested STS action: AssumeRole,
+    plus TagSession when session tags are passed and SetSourceIdentity when a
+    SourceIdentity is passed. Explicit Deny wins; otherwise an Allow is needed."""
+    actions = ['sts:AssumeRole']
+    if any(k.startswith('aws:RequestTag/') for k in ctx) or 'aws:TagKeys' in ctx:
+        actions.append('sts:TagSession')
+    if 'sts:SourceIdentity' in ctx:
+        actions.append('sts:SetSourceIdentity')
+    for action in actions:
+        relevant = [s for s in trust['Statement']
+                    if s['Principal'].get('AWS') == principal and action in _as_list(s['Action'])
+                    and _condition(s.get('Condition'), ctx)]
+        if any(s['Effect'] == 'Deny' for s in relevant) or not any(s['Effect'] == 'Allow' for s in relevant):
+            return False
+    return True
 
 
 INSPECT = ['s3:GetBucketLocation', 's3:GetBucketOwnershipControls', 's3:GetBucketPolicy',
@@ -372,6 +391,10 @@ def evaluate(access_docs, foundation_docs):
                            {'sts:TransitiveTagKeys': ['Team']}):
                 cases.append((AGENT, {**good, **change}, False))
             cases.append((AGENT, {k2: v for k2, v in good.items() if k2 != 'sts:SourceIdentity'}, False))
+            # No session tags at all: explicit Deny (tags are mandatory).
+            cases.append((AGENT, {k2: v for k2, v in good.items() if not k2.startswith(('aws:RequestTag/', 'aws:TagKeys'))}, False))
+            # One tag missing.
+            cases.append((AGENT, {k2: v for k2, v in good.items() if k2 != 'aws:RequestTag/Operation'}, False))
             cases.append((f'arn:aws:iam::{ACCOUNT}:role/adp-agent-dev', good, False))
             cases.append((f'arn:aws:iam::{ACCOUNT}:user/someone', good, False))
             for principal, ctx, want in cases:
@@ -437,6 +460,22 @@ def evaluate(access_docs, foundation_docs):
                 'iam:PermissionsBoundary': BOUNDARY.format('state-read')}
     if decide(control, 'iam:CreateRole', f'{ns}/state-read/s3ue1p001dev02-s3backend-state-read', residual, {}) == 'ALLOW':
         print('RESIDUAL (TD-022): control may create a correctly named role tagged for ANOTHER bucket, with any trust.')
+    control_trust = json.loads(foundation_docs['control']['trust'])
+    good = {'aws:RequestTag/Operation': 's3-backend-control', 'aws:TagKeys': ['Operation'],
+            'sts:SourceIdentity': '10001', 'sts:RoleSessionName': 'adp-s3-backend-control'}
+    for ctx, want in ((good, True),
+                      ({k: v for k, v in good.items() if k != 'sts:SourceIdentity'}, False),
+                      ({k: v for k, v in good.items() if not k.startswith(('aws:RequestTag/', 'aws:TagKeys'))}, False),
+                      ({**good, 'aws:RequestTag/Operation': 'inspect'}, False),
+                      ({**good, 'aws:TagKeys': ['Operation', 'Team']}, False),
+                      ({**good, 'sts:RoleSessionName': 'adp-other'}, False),
+                      ({**good, 'sts:TransitiveTagKeys': ['Operation']}, False)):
+        checks += 1
+        if trust_allows(control_trust, AGENT, ctx) != want:
+            failures.append(('control-trust', sorted(ctx), want))
+    checks += 1
+    if trust_allows(control_trust, f'arn:aws:iam::{ACCOUNT}:user/someone', good):
+        failures.append(('control-trust', 'other principal'))
     agent = json.loads(foundation_docs['agent'])
     for resource, want in ((f'{ns}/state-read/s3ue1p001dev02-s3backend-state-read', True),
                            (f'arn:aws:iam::{ACCOUNT}:role/adp/control/adp-s3-backend-control', True),
@@ -455,6 +494,9 @@ def main():
     parser.add_argument('--terraform-bin', required=True)
     parser.add_argument('--provider-mirror', required=True)
     parser.add_argument('--lockfile', required=True)
+    parser.add_argument('--dump-documents', type=Path,
+                        help='Optional directory to write the generated IAM documents (synthetic account) '
+                             'for an external review such as IAM Access Analyzer.')
     args = parser.parse_args()
     binary = shutil.which(args.terraform_bin)
     if not binary:
@@ -532,6 +574,18 @@ def main():
                                   '{boundaries = {for k, v in local.boundary_documents : k => {document = v}}, '
                                   'control = {policy = local.control_policy, trust = local.control_trust}, '
                                   'agent = local.agent_identity_policy}')
+        if args.dump_documents:
+            out = args.dump_documents
+            out.mkdir(parents=True, exist_ok=True)
+            for (team, seq), docs in access_docs.items():
+                for k in OPS:
+                    (out / f'access-{team}-eks-{seq:02d}-{k}-trust.json').write_text(docs['t'][k])
+                    (out / f'access-{team}-eks-{seq:02d}-{k}-policy.json').write_text(docs['p'][k])
+            for k, v in foundation_docs['boundaries'].items():
+                (out / f'foundation-boundary-{k}.json').write_text(v['document'])
+            (out / 'foundation-control-trust.json').write_text(foundation_docs['control']['trust'])
+            (out / 'foundation-control-policy.json').write_text(foundation_docs['control']['policy'])
+            print(f'DOCUMENTS WRITTEN: {len(list(out.glob("*.json")))}')
         checks, failures = evaluate(access_docs, foundation_docs)
         if failures:
             for failure in failures[:20]:

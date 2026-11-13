@@ -8,20 +8,48 @@ locals {
   bucket_tag_pattern = "${local.naming_policy.resource_prefixes.s3}${coalesce(local.region_code, "-")}????${coalesce(local.env_code, "-")}??"
   role_tag_keys      = ["ManagedBy", "Ownership", "Team", "Instance", "Bucket", "Environment", "Operation", "ApplicationCode"]
 
+  # Same IAM semantics as the workspace roles (see s3-backend-access/trust.tf):
+  # SourceIdentity with SetSourceIdentity; the Operation tag in TagSession and made
+  # mandatory with explicit Deny statements on AssumeRole.
   control_trust = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "AdpAgentControlSession"
-      Effect    = "Allow"
-      Principal = { AWS = var.agent_principal_arn }
-      Action    = ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"]
-      Condition = {
-        StringEquals                = { "aws:RequestTag/Operation" = "s3-backend-control" }
-        "ForAllValues:StringEquals" = { "aws:TagKeys" = ["Operation"] }
-        Null                        = { "sts:SourceIdentity" = "false", "sts:TransitiveTagKeys" = "true" }
-        StringLike                  = { "sts:RoleSessionName" = "adp-s3-backend-control*" }
-      }
-    }]
+    Statement = [
+      {
+        Sid       = "AssumeWithSourceIdentity"
+        Effect    = "Allow"
+        Principal = { AWS = var.agent_principal_arn }
+        Action    = ["sts:AssumeRole", "sts:SetSourceIdentity"]
+        Condition = {
+          Null       = { "sts:SourceIdentity" = "false" }
+          StringLike = { "sts:RoleSessionName" = "adp-s3-backend-control*" }
+        }
+      },
+      {
+        Sid       = "TagControlSession"
+        Effect    = "Allow"
+        Principal = { AWS = var.agent_principal_arn }
+        Action    = "sts:TagSession"
+        Condition = {
+          StringEquals                = { "aws:RequestTag/Operation" = "s3-backend-control" }
+          "ForAllValues:StringEquals" = { "aws:TagKeys" = ["Operation"] }
+          Null                        = { "aws:RequestTag/Operation" = "false", "sts:TransitiveTagKeys" = "true" }
+        }
+      },
+      {
+        Sid       = "DenyTransitiveTags"
+        Effect    = "Deny"
+        Principal = { AWS = var.agent_principal_arn }
+        Action    = ["sts:AssumeRole", "sts:TagSession"]
+        Condition = { Null = { "sts:TransitiveTagKeys" = "false" } }
+      },
+      {
+        Sid       = "RequireOperationTag"
+        Effect    = "Deny"
+        Principal = { AWS = var.agent_principal_arn }
+        Action    = "sts:AssumeRole"
+        Condition = { StringNotEquals = { "aws:RequestTag/Operation" = "s3-backend-control" } }
+      },
+    ]
   })
 
   # Create/configure ONLY the namespaced workspace roles, each with the exact

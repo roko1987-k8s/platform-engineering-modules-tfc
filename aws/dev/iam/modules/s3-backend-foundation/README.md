@@ -33,7 +33,9 @@ second, literal layer.
 ## Control role `adp-s3-backend-control`
 
 Trust: only `adp-agent-dev`, session tag `Operation=s3-backend-control`,
-SourceIdentity required, no transitive tags, session `adp-s3-backend-control*`.
+SourceIdentity required, no transitive tags, session `adp-s3-backend-control*`
+(same statement structure as the workspace roles: AssumeRole + SetSourceIdentity,
+TagSession, and explicit Deny for a missing/different tag or transitive tags).
 
 | Allowed | Scope / condition |
 |---|---|
