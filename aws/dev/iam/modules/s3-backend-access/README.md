@@ -67,11 +67,12 @@ and real AWS evaluation remain unverified offline.
 Exactly one principal: the IAM user `adp-agent-dev` of the approved account (never
 root, wildcard, roles, STS sessions, GitHub OIDC or Vault identities). Following
 IAM semantics (validated with IAM Access Analyzer): `sts:AssumeRole` +
-`sts:SetSourceIdentity` require a non-null SourceIdentity (the verified employeeId)
-and the session name; `sts:TagSession` admits only the tags Team, Instance
-(`eks-NN`) and Operation with those exact values and no other keys; explicit Deny
-statements reject an AssumeRole whose tags are missing or different, and any
-transitive tag keys. Session name
+`sts:SetSourceIdentity` require only a non-null SourceIdentity (the verified
+employeeId; `sts:RoleSessionName` is not in the SetSourceIdentity context);
+`sts:TagSession` admits only the tags Team, Instance (`eks-NN`) and Operation with
+those exact values and no other keys; explicit Deny statements reject an
+AssumeRole whose session name or tags are missing or different, and any transitive
+tag keys. Session name
 `adp-<TEAM>-<eks-NN>-<operation>*` (the agent's helper builds
 `adp-<label>-<operation>` with label `<TEAM>-<eks-NN>`). Tags/SourceIdentity are audit context asserted
 by the trusted technical principal, not proof of Keycloak identity. The principal
