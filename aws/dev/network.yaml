@@ -1,0 +1,32 @@
+# Catálogo central de red (adp-network-catalog-v1).
+#
+# Reglas de asignación automática de red por workspace (equipo + eks-NN).
+# Solo el Terraform Agent asigna bloques (registro en PostgreSQL); Orchestrator y
+# Backstage validan que el bloque pertenezca al pool y derivan las mismas subredes.
+# Un bloque asignado no se libera con un Destroy: queda reservado para su
+# workspace hasta que se retire, y un bloque retirado no se reutiliza solo.
+network:
+  schema_version: 1
+  # Un /16 por workspace. Las subredes se derivan del bloque con el layout:
+  # cada número es el tercer octeto de una /24 dentro del bloque.
+  block_prefix: 16
+  subnet_prefix: 24
+  layout:
+    cluster: [0, 1]
+    node: [10, 11]
+    public: [20]
+  # Referencia de aprobación generada: la asignación la aprueba este catálogo.
+  approval_reference: "ADP-IPAM-{team}-{deployment}"
+  environments:
+    dev:
+      enabled: true
+      first_block: 10.100.0.0/16
+      blocks: 100 # 10.100.0.0/16 .. 10.199.0.0/16
+    cert:
+      enabled: false # reservado, aún sin asignación automática
+      first_block: 10.200.0.0/16
+      blocks: 28 # 10.200.0.0/16 .. 10.227.0.0/16
+    prod:
+      enabled: false # reservado, aún sin asignación automática
+      first_block: 10.228.0.0/16
+      blocks: 28 # 10.228.0.0/16 .. 10.255.0.0/16
