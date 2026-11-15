@@ -1,0 +1,200 @@
+locals {
+  workspace        = "workspaces/${var.team_id}/terraform/aws/${var.environment}/eks-${format("%02d", var.sequence)}"
+  team             = var.team_id
+  environment      = var.environment
+  deployment       = "eks-${format("%02d", var.sequence)}"
+  catalog_path     = "${path.module}/../eks.yaml"
+  catalog_document = yamldecode(file(local.catalog_path)).eks
+  # schema_version 2 separates profiles per environment. Submodules, variable
+  # validations and outputs keep consuming the v1 shape for the selected one.
+  catalog = merge(
+    { for key, value in local.catalog_document : key => value if key != "environments" },
+    {
+      schema_version = 1
+      nodegroups     = local.catalog_document.environments[var.environment].nodegroups
+    },
+  )
+  requested_profiles = { system = var.system_size, user = var.user_size }
+
+  requested_counts = var.node_counts
+
+  # Modes. DESIGN_WITHOUT_AWS_ACCOUNT never creates anything. NETWORKING_ONLY
+  # creates the VPC, subnets and egress. EKS_CLUSTER adds the cluster on top of
+  # the same networking instance (module.networking[0] in both modes), so moving
+  # from NETWORKING_ONLY to EKS_CLUSTER never replaces the network.
+  execution    = var.proposal_mode != "DESIGN_WITHOUT_AWS_ACCOUNT"
+  cluster_mode = var.proposal_mode == "EKS_CLUSTER"
+
+  # Networking assigns and approves the CIDRs. No CIDR or invented segment exists here.
+  networking       = try(var.reviewed_execution.networking, null)
+  networking_ready = try(local.execution && var.reviewed_execution != null && local.networking != null && trimspace(local.networking.approval_reference) != "", false)
+  # Connectivity can only be attested once the VPC exists (no circular dependency).
+  connectivity_ready = try(local.networking_ready && local.networking.connectivity.routing_reviewed && local.networking.connectivity.private_api_reachable && local.networking.connectivity.dns_reviewed && local.networking.connectivity.registry_sts_eks_reachable, false)
+  # Cluster-only inputs are optional: KMS, log retention, root volumes and AMI
+  # release use AWS defaults when null (EKS default secrets encryption, no
+  # control-plane log group, EBS encrypted with the AWS managed key and the AMI root
+  # size, latest AMI release for the version). Every name comes from module.naming;
+  # resource_prefix is deprecated and, when present, must equal the computed name.
+  declared_prefix       = try(var.reviewed_execution.resource_prefix, null)
+  prefix_matches_naming = local.declared_prefix == null ? true : trimspace(local.declared_prefix) == module.naming.names.eks
+  # Without approved managed add-ons, EKS bootstraps its default vpc-cni,
+  # kube-proxy and CoreDNS (vpc-cni then needs AmazonEKS_CNI_Policy on node roles).
+  self_managed_networking_addons = length(try(var.reviewed_execution.addons, {})) == 0
+  # Plan covers the whole composition: connectivity of a VPC that does not exist
+  # yet cannot be attested, so it is verified after Apply (check below), not here.
+  cluster_ready = local.cluster_mode && local.networking_ready
+
+  # Identity tags win over reviewed tags so they cannot be overridden. Applied to
+  # networking and to every cluster resource that supports tags.
+  network_tags = merge(try(var.reviewed_execution.tags, {}), { Team = var.team_id, ApplicationCode = var.application_code, Environment = var.environment })
+
+  selections = {
+    for role, size in local.requested_profiles : role => {
+      size = size
+      # Select only when the authoritative catalogue has exactly one choice.
+      capacity_type   = one(local.catalog.nodegroups[role].allowed_capacity_types)
+      minimum         = local.requested_counts[role].minimum
+      desired         = local.requested_counts[role].desired
+      maximum         = local.requested_counts[role].maximum
+      release_version = try(var.reviewed_execution.release_versions[role], null)
+    }
+  }
+}
+
+# A lifecycle precondition is a blocking error, unlike an advisory check block.
+# Preconditions use only variables, locals and pure naming, so they are evaluated during plan
+# and stop it before any change. Modules intentionally do not consume this
+# resource's output: a changed input would make their arguments unknown and force
+# replacement of networking or the cluster.
+resource "terraform_data" "networking_gate" {
+  input = { workspace = local.workspace, mode = var.proposal_mode }
+  lifecycle {
+    precondition {
+      condition     = local.networking_ready
+      error_message = "NETWORKING_PENDING: draft files may be reviewed; terraform plan/apply are blocked until Networking assigns and approves the VPC and subnet CIDRs."
+    }
+    precondition {
+      condition     = !local.cluster_mode || local.prefix_matches_naming
+      error_message = "EXECUTION_INPUT_INCOMPLETE: resource_prefix is deprecated; names come from module.naming and a declared resource_prefix must equal the computed EKS name."
+    }
+  }
+}
+
+# The credentials Terraform received must belong to the reviewed target account.
+data "aws_caller_identity" "current" {
+  count = local.networking_ready ? 1 : 0
+}
+resource "terraform_data" "account_gate" {
+  count = local.networking_ready ? 1 : 0
+  input = var.reviewed_execution.aws_account_id
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current[0].account_id == var.reviewed_execution.aws_account_id
+      error_message = "ACCOUNT_MISMATCH: the AWS credentials do not belong to the reviewed target account."
+    }
+  }
+}
+
+# Modules use an inherited provider. None has an instance in design mode.
+
+module "networking" {
+  source       = "./modules/aws/networking"
+  count        = local.networking_ready ? 1 : 0
+  name         = module.naming.names.vpc
+  subnet_names = module.naming.subnet_names
+  region       = var.region
+  networking   = local.networking
+  tags         = local.network_tags
+}
+
+# Post-Apply verification (advisory, never blocks Plan/Apply): it keeps warning
+# until Networking attests, with evidence on the created VPC, routing, private
+# API, DNS and ECR/S3/STS/EKS reachability. No attestation is assumed here.
+check "connectivity_review" {
+  assert {
+    condition     = !local.networking_ready || local.connectivity_ready
+    error_message = "CONNECTIVITY_PENDING: post-Apply verification pending; Networking must attest routing, private API, DNS and ECR/S3/STS/EKS reachability on the created VPC."
+  }
+}
+
+module "iam" {
+  source             = "./modules/aws/iam"
+  count              = local.cluster_ready ? 1 : 0
+  name               = module.naming.names.eks
+  pod_identity_roles = try(var.reviewed_execution.pod_identity_roles, {})
+  tags               = local.network_tags
+  node_cni_policy    = local.self_managed_networking_addons
+}
+module "eks" {
+  source                        = "./modules/aws/eks"
+  count                         = local.cluster_ready ? 1 : 0
+  name                          = module.naming.names.eks
+  catalog                       = local.catalog
+  kubernetes_version            = var.kubernetes_version
+  region                        = var.region
+  role_arn                      = module.iam[0].cluster_role_arn
+  subnet_ids                    = module.networking[0].cluster_subnet_ids
+  kms_key_arn                   = try(var.reviewed_execution.kms_key_arn, null)
+  log_retention_days            = try(var.reviewed_execution.log_retention_days, null)
+  bootstrap_self_managed_addons = local.self_managed_networking_addons
+  deletion_protection           = try(var.reviewed_execution.deletion_protection, true)
+  tags                          = local.network_tags
+}
+# No custom security group: EKS creates the cluster SG and attaches it to the
+# control plane and to the managed nodes. Only approved additional rules are
+# added on it (none today: EKS-managed rules cover API, kubelet, DNS and egress).
+# Dependency is one-way (eks -> rules), so there is no cycle with the node groups.
+module "security_groups" {
+  source                    = "./modules/aws/security-groups"
+  count                     = local.cluster_ready ? 1 : 0
+  cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id
+  vpc_id                    = module.networking[0].vpc_id
+  tags                      = local.network_tags
+  rules                     = try(var.reviewed_execution.security_group_rules, {})
+  external_destinations     = try(var.reviewed_execution.external_destinations, {})
+}
+module "foundation_addons" {
+  source       = "./modules/aws/addons"
+  count        = local.cluster_ready ? 1 : 0
+  cluster_name = module.eks[0].name
+  addons       = try({ for name, addon in var.reviewed_execution.addons : name => addon if name != "coredns" }, {})
+  tags         = local.network_tags
+}
+module "nodegroups" {
+  source             = "./modules/aws/nodegroups"
+  count              = local.cluster_ready ? 1 : 0
+  cluster_name       = module.eks[0].name
+  kubernetes_version = var.kubernetes_version
+  catalog            = local.catalog
+  subnet_ids         = module.networking[0].node_subnet_ids
+  node_role_arns     = module.iam[0].node_role_arns
+  selections         = local.selections
+  root_volumes       = try(var.reviewed_execution.root_volumes, null)
+
+  cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id
+  tags                      = local.network_tags
+  depends_on                = [module.foundation_addons]
+}
+module "dns_addon" {
+  source       = "./modules/aws/addons"
+  count        = local.cluster_ready ? 1 : 0
+  cluster_name = module.eks[0].name
+  addons       = try({ for name, addon in var.reviewed_execution.addons : name => addon if name == "coredns" }, {})
+  tags         = local.network_tags
+  depends_on   = [module.nodegroups]
+}
+
+# Pure naming is available for review even while networking blocks deployment.
+module "naming" {
+  source      = "./modules/naming"
+  policy      = jsondecode(file("${path.module}/naming/aws.json"))
+  region      = var.region
+  team_id     = local.team
+  environment = local.environment
+  sequence    = var.sequence
+  subnet_counts = {
+    public  = length(try(local.networking.public_subnet_cidrs, []))
+    cluster = length(try(local.networking.cluster_subnet_cidrs, []))
+    node    = length(try(local.networking.node_subnet_cidrs, []))
+  }
+}
