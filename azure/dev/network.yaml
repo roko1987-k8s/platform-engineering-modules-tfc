@@ -1,0 +1,24 @@
+# Catálogo central de red de Azure (adp-network-catalog-v1), propio y separado del de AWS.
+#
+# Misma regla que AWS (Regla A): un /16 por workspace (equipo + aks-NN), cuyo índice
+# es el código numérico del equipo (D005 -> 10.5.0.0/16). El pool de Azure ocupa el
+# espacio que AWS no usa (AWS: 10.100.0.0/16 en adelante), así que no se solapan.
+# Las subredes se derivan del bloque con el layout: cada número es el tercer octeto
+# de una /24 dentro del bloque. Con Azure CNI clásico, nodos y pods usan direcciones
+# de su subred (cada nodo reserva max_pods + 1); la composición bloquea el plan si
+# los límites del catálogo no caben en la /24. Los servicios usan el rango de aks.yaml.
+network:
+  schema_version: 1
+  block_prefix: 16
+  subnet_prefix: 24
+  layout:
+    system: [0]
+    user: [1]
+  approval_reference: "ADP-IPAM-{team}-{deployment}"
+  environments:
+    dev:
+      enabled: true
+      first_block: 10.0.0.0/16
+      blocks: 100 # 10.0.0.0/16 .. 10.99.0.0/16
+    # cert y prod: pendientes; requieren un rango fuera de 10.0.0.0/8, que ya
+    # ocupan dev de Azure y los pools de AWS.

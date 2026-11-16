@@ -1,39 +1,49 @@
 aks:
+  schema_version: 2
+  configuration_model: system_user_profiles
+
   kubernetes:
-    allowed_versions:
-      - "1.32"
-      - "1.33"
+    # Verify against the versions AKS supports in the region before the first real plan.
+    allowed_versions: ["1.33", "1.34", "1.35"]
 
   cluster:
-    sku_tier: Standard
+    allowed_regions: [eastus]
+    # Free: no SLA and no hourly control-plane charge (lab). Standard adds the SLA.
+    sku_tier: Free
     private_cluster: true
+    # Classic Azure CNI (flat): every pod gets an address of its node pool subnet,
+    # reserved up front per node (max_pods + 1). Services use the range below,
+    # which must not overlap any workspace VNet.
+    service_cidr: 172.16.0.0/16
+    dns_service_ip: 172.16.0.10
 
-  nodepools:
-    system:
-      mode: System
-      sizes:
-        S: Standard_D4s_v5
-        M: Standard_D8s_v5
-      default_size: S
-      min_count: 1
-      max_count: 3
+  environments:
+    dev:
+      nodepools:
+        system:
+          sizes:
+            S: Standard_D4s_v5
+            M: Standard_D8s_v5
+          default_size: S
+          min_count: 1
+          max_count: 3
+          default_count: 1
+          # Classic CNI: (max_count + 1 surge) x (max_pods + 1) must fit the /24 subnet.
+          max_pods: 30
 
-    user:
-      mode: User
-      sizes:
-        S: Standard_D4s_v5
-        M: Standard_D8s_v5
-      default_size: M
-      min_count: 1
-      max_count: 2
+        user:
+          sizes:
+            S: Standard_D4s_v5
+            M: Standard_D8s_v5
+          default_size: M
+          min_count: 1
+          max_count: 2
+          default_count: 1
+          max_pods: 30
+
+        limits:
+          max_total_nodes: 5
 
   networking:
-    mode: new
-    cidr_source: networking_team
-
-    segments:
-      system:
-        subnet_name: snet-aks-system
-
-      user:
-        subnet_name: snet-aks-user
+    conformity: pending
+    approved_options: {}

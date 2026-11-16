@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "region_codes": {
+    "eastus": "eus"
+  },
+  "environment_codes": {
+    "dev": "dev",
+    "cert": "cert",
+    "prod": "prod"
+  },
+  "resource_prefixes": {
+    "aks": "aks",
+    "vnet": "vnet",
+    "rg": "rg",
+    "st": "st"
+  },
+  "sequence_width": 2
+}

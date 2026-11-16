@@ -18,8 +18,11 @@ fixtures, ejemplos de laboratorio ni resultados internos de pruebas.
 - `aws/dev/iam/modules/github-oidc/`: roles por fase con proveedor OIDC existente.
   Ver su README para entradas obligatorias y bloqueo de aprovisionamiento.
 - `github-actions/`: plantillas inactivas separadas por Validate, Apply y Destroy.
-- `tools/terraform/validate-offline.py`: validación operativa sin fixtures ni AWS.
-- `azure/dev/aks.yaml`: catálogo preexistente de Azure, conservado sin cambios.
+- `tools/terraform/validate-offline.py`: validación operativa sin fixtures ni acceso a la nube (AWS y Azure).
+- `azure/dev/aks.yaml`: catálogo autorizado de AKS (schema v2, misma forma que `eks.yaml`).
+- `azure/dev/network.yaml`: pool de red propio de Azure (Regla A).
+- `azure/dev/aks/`: composición AKS (module-v2) con naming, networking, identity,
+  aks, nodepools y access. Ver `azure/dev/aks/README.md`.
 
 Las rutas son relativas a la raíz del repositorio. Los módulos son independientes;
 no se fusionan main.tf ni se copian módulos dentro de los workspaces generados.
@@ -46,12 +49,14 @@ No ejecutar Terraform directamente en `aws/dev/`: main.tf contiene tokens.
 El formato se comprueba únicamente en los módulos y bootstrap:
 
 ```sh
-terraform fmt -check -recursive aws/dev/eks/modules aws/dev/s3 aws/dev/iam/modules
+terraform fmt -check -recursive aws/dev/eks/modules aws/dev/s3 aws/dev/iam/modules azure/dev/aks
 python3 tools/terraform/validate-offline.py --terraform-bin "$TERRAFORM_BIN" --provider-mirror "$TERRAFORM_PROVIDER_MIRROR" --lockfile "$REVIEWED_PROVIDER_LOCKFILE"
+python3 tools/terraform/validate-offline.py --terraform-bin "$TERRAFORM_BIN" --provider-mirror "$TERRAFORM_PROVIDER_MIRROR" --azure-lockfile "$REVIEWED_AZURERM_LOCKFILE"
 ```
 
 El validador requiere herramientas ya instaladas, un mirror local y un lockfile
-existente revisado que seleccione AWS 6.20.0. El mirror debe contener el paquete
+existente revisado por nube: AWS 6.20.0 (`--lockfile`) y/o azurerm 4.81.0
+(`--azure-lockfile`; `--azure-provider-mirror` si el mirror de Azure es otro). El mirror debe contener el paquete
 completo compatible con sus checksums; no regenerar el lock si no coincide. Usa copias temporales fuera del
 repositorio, backend=false y lockfile=readonly; no descarga providers, no cambia
 restricciones ni modifica el lockfile de entrada. No ejecuta plan/apply/destroy ni
