@@ -175,6 +175,21 @@ module "nodegroups" {
   tags                      = local.network_tags
   depends_on                = [module.foundation_addons]
 }
+# Access (TD-049): Platform Engineering admin + read-only bot of this cluster, both
+# through the SSM jump host; only when the Agent injects reviewed_execution.access.
+module "access" {
+  source                    = "./modules/aws/access"
+  count                     = local.cluster_ready && try(var.reviewed_execution.access, null) != null ? 1 : 0
+  name                      = module.naming.names.eks
+  cluster_name              = module.eks[0].name
+  cluster_arn               = module.eks[0].arn
+  cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id
+  vpc_id                    = module.networking[0].vpc_id
+  subnet_id                 = module.networking[0].node_subnet_ids[0]
+  platform_admin_role_arns  = var.reviewed_execution.access.platform_admin_role_arns
+  bot_assumer_arns          = var.reviewed_execution.access.bot_assumer_arns
+  tags                      = local.network_tags
+}
 module "dns_addon" {
   source       = "./modules/aws/addons"
   count        = local.cluster_ready ? 1 : 0

@@ -35,3 +35,11 @@ output "network" {
     nat_public_ips     = module.networking[0].nat_public_ips
   } : null
 }
+output "access" {
+  description = "Cluster access (TD-049); null when no access was injected."
+  value = length(module.access) == 0 ? null : {
+    jump_instance_id         = module.access[0].jump_instance_id
+    bot_role_arn             = module.access[0].bot_role_arn
+    platform_admin_role_arns = module.access[0].platform_admin_role_arns
+  }
+}

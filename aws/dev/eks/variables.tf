@@ -94,7 +94,14 @@ variable "reviewed_execution" {
     external_destinations = optional(map(string), {})
     pod_identity_roles    = optional(map(object({ policy_json = string })), {})
     deletion_protection   = optional(bool, true)
-    addons                = optional(map(object({ version = string, ownership_approved = bool, configuration_values = optional(string), service_account_role_arn = optional(string), pod_identity_associations = optional(map(string), {}) })), {})
+    # Cluster access (TD-049, option B), injected by the Terraform Agent (never in Git):
+    # Platform Engineering admin roles and the central bot identity. Null keeps the
+    # cluster without any access entry (previous behavior).
+    access = optional(object({
+      platform_admin_role_arns = list(string)
+      bot_assumer_arns         = list(string)
+    }))
+    addons = optional(map(object({ version = string, ownership_approved = bool, configuration_values = optional(string), service_account_role_arn = optional(string), pod_identity_associations = optional(map(string), {}) })), {})
   })
   default = null
   validation {
