@@ -3,6 +3,15 @@ variable "name" {
   type        = string
 }
 
+variable "team_id" {
+  description = "Team that owns this cluster; the bot role only accepts sessions tagged with it."
+  type        = string
+  validation {
+    condition     = can(regex("^[DP][0-9]{3}$", var.team_id)) && var.team_id != "D000" && var.team_id != "P000"
+    error_message = "team_id must be a team code such as D007."
+  }
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster (module.eks)."
   type        = string

@@ -181,6 +181,7 @@ module "access" {
   source                    = "./modules/aws/access"
   count                     = local.cluster_ready && try(var.reviewed_execution.access, null) != null ? 1 : 0
   name                      = module.naming.names.eks
+  team_id                   = local.team
   cluster_name              = module.eks[0].name
   cluster_arn               = module.eks[0].arn
   cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id

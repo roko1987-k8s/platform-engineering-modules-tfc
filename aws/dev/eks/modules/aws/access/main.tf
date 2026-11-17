@@ -2,7 +2,8 @@
 # people reach it through SSM port forwarding to a jump host without inbound ports.
 #   - Platform Engineering roles: cluster admin (access entry, cluster scope).
 #   - Bot role of THIS cluster: read-only view (no Secrets), assumable only by the
-#     central bot identity; it never grants access to any other cluster.
+#     central bot identity AND only in a session tagged with this cluster's team
+#     (Team = team_id): IAM itself blocks cross-team reads, whatever the caller says.
 # The Terraform identity gets no Kubernetes access (bootstrap admin stays disabled).
 data "aws_partition" "current" {}
 data "aws_region" "current" {}
@@ -42,6 +43,8 @@ resource "aws_iam_role" "bot" {
       Effect    = "Allow"
       Principal = { AWS = var.bot_assumer_arns }
       Action    = ["sts:AssumeRole", "sts:SetSourceIdentity"]
+      # The broker session carries the requester's verified team as a session tag.
+      Condition = { StringEquals = { "aws:PrincipalTag/Team" = var.team_id } }
     }]
   })
   tags = var.tags
