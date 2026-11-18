@@ -3,6 +3,11 @@ output "bot_role_arn" {
   value       = aws_iam_role.bot.arn
 }
 
+output "tools_role_arn" {
+  description = "Tools role of this cluster (cluster admin for the Argo CD bootstrap; assumed by the tools broker)."
+  value       = aws_iam_role.tools.arn
+}
+
 output "jump_instance_id" {
   description = "SSM jump host: target of AWS-StartPortForwardingSessionToRemoteHost."
   value       = aws_instance.jump.id
