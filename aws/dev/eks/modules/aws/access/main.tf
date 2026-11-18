@@ -4,13 +4,46 @@
 #   - Bot role of THIS cluster: read-only view (no Secrets), assumable only by the
 #     central bot identity AND only in a session tagged with this cluster's team
 #     (Team = team_id): IAM itself blocks cross-team reads, whatever the caller says.
+#   - Tools role of THIS cluster: cluster admin, only to bootstrap Argo CD (Tools Agent),
+#     assumable only by the tools broker of this account and with the same Team condition.
+#     The tools broker must exist before this module is applied (IAM validates principals).
 # The Terraform identity gets no Kubernetes access (bootstrap admin stays disabled).
 data "aws_partition" "current" {}
 data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
 locals {
-  access_policies = "arn:${data.aws_partition.current.partition}:eks::aws:cluster-access-policy"
-  bot_role_name   = substr("${var.name}-k8s-bot", 0, 64)
+  access_policies  = "arn:${data.aws_partition.current.partition}:eks::aws:cluster-access-policy"
+  bot_role_name    = substr("${var.name}-k8s-bot", 0, 64)
+  tools_role_name  = substr("${var.name}-k8s-tools", 0, 64)
+  tools_broker_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.tools_broker_role_name}"
+  # Both cluster roles only describe this cluster and tunnel through this jump host.
+  tunnel_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "DescribeThisCluster"
+        Effect   = "Allow"
+        Action   = ["eks:DescribeCluster"]
+        Resource = var.cluster_arn
+      },
+      {
+        Sid    = "TunnelThroughThisJumpHost"
+        Effect = "Allow"
+        Action = ["ssm:StartSession"]
+        Resource = [
+          aws_instance.jump.arn,
+          "arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.region}::document/AWS-StartPortForwardingSessionToRemoteHost",
+        ]
+      },
+      {
+        Sid      = "OwnSessionsOnly"
+        Effect   = "Allow"
+        Action   = ["ssm:TerminateSession", "ssm:ResumeSession"]
+        Resource = "arn:${data.aws_partition.current.partition}:ssm:*:*:session/$${aws:userid}-*"
+      },
+    ]
+  })
 }
 
 # --- Platform Engineering: cluster admin --------------------------------------
@@ -51,34 +84,9 @@ resource "aws_iam_role" "bot" {
 }
 
 resource "aws_iam_role_policy" "bot" {
-  name = "eks-describe-and-ssm-tunnel"
-  role = aws_iam_role.bot.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "DescribeThisCluster"
-        Effect   = "Allow"
-        Action   = ["eks:DescribeCluster"]
-        Resource = var.cluster_arn
-      },
-      {
-        Sid    = "TunnelThroughThisJumpHost"
-        Effect = "Allow"
-        Action = ["ssm:StartSession"]
-        Resource = [
-          aws_instance.jump.arn,
-          "arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.region}::document/AWS-StartPortForwardingSessionToRemoteHost",
-        ]
-      },
-      {
-        Sid      = "OwnSessionsOnly"
-        Effect   = "Allow"
-        Action   = ["ssm:TerminateSession", "ssm:ResumeSession"]
-        Resource = "arn:${data.aws_partition.current.partition}:ssm:*:*:session/$${aws:userid}-*"
-      },
-    ]
-  })
+  name   = "eks-describe-and-ssm-tunnel"
+  role   = aws_iam_role.bot.id
+  policy = local.tunnel_policy
 }
 
 resource "aws_eks_access_entry" "bot" {
@@ -92,6 +100,46 @@ resource "aws_eks_access_policy_association" "bot" {
   cluster_name  = var.cluster_name
   principal_arn = aws_eks_access_entry.bot.principal_arn
   policy_arn    = "${local.access_policies}/AmazonEKSViewPolicy"
+  access_scope {
+    type = "cluster"
+  }
+}
+
+# --- Tools role of this cluster: Argo CD bootstrap only (Tools Agent) -----------
+resource "aws_iam_role" "tools" {
+  name                 = local.tools_role_name
+  description          = "Cluster admin of ${var.cluster_name} for the ADP Tools Agent (Argo CD bootstrap only)."
+  max_session_duration = 3600
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { AWS = local.tools_broker_arn }
+      Action    = "sts:AssumeRole"
+      Condition = { StringEquals = { "aws:PrincipalTag/Team" = var.team_id } }
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "tools" {
+  name   = "eks-describe-and-ssm-tunnel"
+  role   = aws_iam_role.tools.id
+  policy = local.tunnel_policy
+}
+
+resource "aws_eks_access_entry" "tools" {
+  cluster_name  = var.cluster_name
+  principal_arn = aws_iam_role.tools.arn
+  type          = "STANDARD"
+  tags          = var.tags
+}
+
+resource "aws_eks_access_policy_association" "tools" {
+  cluster_name  = var.cluster_name
+  principal_arn = aws_eks_access_entry.tools.principal_arn
+  # Argo CD installs CRDs, ClusterRoles and webhooks: cluster admin is required for the bootstrap.
+  policy_arn = "${local.access_policies}/AmazonEKSClusterAdminPolicy"
   access_scope {
     type = "cluster"
   }

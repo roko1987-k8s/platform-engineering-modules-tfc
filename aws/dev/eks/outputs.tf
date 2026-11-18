@@ -40,6 +40,7 @@ output "access" {
   value = length(module.access) == 0 ? null : {
     jump_instance_id         = module.access[0].jump_instance_id
     bot_role_arn             = module.access[0].bot_role_arn
+    tools_role_arn           = module.access[0].tools_role_arn
     platform_admin_role_arns = module.access[0].platform_admin_role_arns
   }
 }

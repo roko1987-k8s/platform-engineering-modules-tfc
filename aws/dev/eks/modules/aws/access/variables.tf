@@ -59,6 +59,16 @@ variable "bot_assumer_arns" {
   }
 }
 
+variable "tools_broker_role_name" {
+  description = "Name of the tools broker role in this account (assumed only by the Tools Agent); the only principal of the cluster's tools role."
+  type        = string
+  default     = "adp-k8s-tools-broker"
+  validation {
+    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,64}$", var.tools_broker_role_name))
+    error_message = "tools_broker_role_name must be an IAM role name."
+  }
+}
+
 variable "jump_instance_type" {
   description = "Instance type of the SSM jump host (ARM)."
   type        = string
