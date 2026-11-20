@@ -70,6 +70,7 @@ resource "aws_iam_role" "bot" {
   name                 = local.bot_role_name
   description          = "Read-only Kubernetes view of ${var.cluster_name} for the ADP bot (no Secrets)."
   max_session_duration = 3600
+  permissions_boundary = var.permissions_boundary
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -110,6 +111,7 @@ resource "aws_iam_role" "tools" {
   name                 = local.tools_role_name
   description          = "Cluster admin of ${var.cluster_name} for the ADP Tools Agent (Argo CD bootstrap only)."
   max_session_duration = 3600
+  permissions_boundary = var.permissions_boundary
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -151,8 +153,9 @@ data "aws_ssm_parameter" "al2023_arm64" {
 }
 
 resource "aws_iam_role" "jump" {
-  name        = substr("${var.name}-ssm-jump", 0, 64)
-  description = "SSM jump host of ${var.cluster_name} (Session Manager only)."
+  name                 = substr("${var.name}-ssm-jump", 0, 64)
+  description          = "SSM jump host of ${var.cluster_name} (Session Manager only)."
+  permissions_boundary = var.permissions_boundary
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

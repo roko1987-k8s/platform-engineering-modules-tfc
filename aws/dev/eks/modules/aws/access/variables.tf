@@ -83,3 +83,8 @@ variable "tags" {
   description = "Identity tags (Team, ApplicationCode, Environment) applied to every taggable resource."
   type        = map(string)
 }
+variable "permissions_boundary" {
+  description = "Permissions boundary of every IAM role created here (per-instance executor model); null keeps roles without one."
+  type        = string
+  default     = null
+}

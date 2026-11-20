@@ -184,3 +184,30 @@ compatibilidad del contrato anterior. No son la composición del contrato nuevo.
 Las salidas nuevas son `proposed_names`, `resolved_profiles` y `design_status`.
 Usar el validador offline oficial, mirror local y lockfile existente; ninguna
 validación estática autoriza plan/apply ni demuestra un clúster desplegable.
+
+## Boundary de los roles de carga de trabajo (modelo `per-instance`, TD-016)
+
+`reviewed_execution.workload_permissions_boundary_arn` (opcional, `null` por defecto) fija la
+permissions boundary de **todos** los roles IAM que crea la composición:
+`<eks>-cluster`, `<eks>-system`, `<eks>-user`, los de pod identity,
+`<eks>-k8s-bot`, `<eks>-k8s-tools` y `<eks>-ssm-jump`. Solo acepta
+`arn:aws:iam::<cuenta>:policy/adp/boundary/adp-workload-boundary`. La inyecta el
+Terraform Agent (`TF_VAR_`, como `access`), nunca va en Git. Una versión anterior
+del módulo descarta el atributo sin error. Con el rol de Apply por instancia,
+IAM rechaza crear o modificar esos roles sin esa boundary: así un rol creado por
+Terraform no puede superar ese techo (sin IAM, STS ni buckets de State).
+
+El tag de identidad `AdpInstance = names.eks` se añade a todos los recursos
+etiquetables, para que los permisos del rol por instancia se limiten a esa
+instancia y no a todo el equipo. No se añade a los `tag_specifications` de los
+launch templates: eso crearía una versión nueva y reemplazaría los nodos.
+
+Con `null` el comportamiento es el anterior (modo `direct`). En un workspace
+existente, pasar a esta versión solo añade el tag y, con la variable, la
+boundary: cambios in-place, sin reemplazos.
+
+Pruebas offline (provider simulado, sin AWS):
+
+```sh
+cd aws/dev/eks && terraform init -backend=false && terraform test
+```
