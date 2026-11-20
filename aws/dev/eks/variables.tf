@@ -101,11 +101,18 @@ variable "reviewed_execution" {
       platform_admin_role_arns = list(string)
       bot_assumer_arns         = list(string)
     }))
-    addons = optional(map(object({ version = string, ownership_approved = bool, configuration_values = optional(string), service_account_role_arn = optional(string), pod_identity_associations = optional(map(string), {}) })), {})
+    # Per-instance executor model (TD-016), injected by the Terraform Agent (never in Git):
+    # boundary of every IAM role this composition creates. Null = previous behavior.
+    workload_permissions_boundary_arn = optional(string)
+    addons                            = optional(map(object({ version = string, ownership_approved = bool, configuration_values = optional(string), service_account_role_arn = optional(string), pod_identity_associations = optional(map(string), {}) })), {})
   })
   default = null
   validation {
     condition     = var.reviewed_execution == null || can(regex("^[0-9]{12}$", var.reviewed_execution.aws_account_id))
     error_message = "aws_account_id must be the 12-digit approved target account."
+  }
+  validation {
+    condition     = try(var.reviewed_execution.workload_permissions_boundary_arn, null) == null || can(regex("^arn:aws:iam::[0-9]{12}:policy/adp/boundary/adp-workload-boundary$", var.reviewed_execution.workload_permissions_boundary_arn))
+    error_message = "Only the ADP workload boundary (/adp/boundary/adp-workload-boundary) is accepted."
   }
 }

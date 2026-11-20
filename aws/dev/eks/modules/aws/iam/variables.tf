@@ -22,3 +22,8 @@ variable "node_cni_policy" {
   type        = bool
   default     = false
 }
+variable "permissions_boundary" {
+  description = "Permissions boundary of every IAM role created here (per-instance executor model); null keeps roles without one."
+  type        = string
+  default     = null
+}

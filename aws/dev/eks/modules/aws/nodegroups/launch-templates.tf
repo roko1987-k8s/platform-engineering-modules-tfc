@@ -24,7 +24,9 @@ resource "aws_launch_template" "role" {
   # EKS supplies AL2023 bootstrap data for the managed AMI selected below.
   tag_specifications {
     resource_type = "instance"
-    tags          = merge(var.tags, { Name = "${var.cluster_name}-${each.key}", NodeRole = each.key })
+    # Without AdpInstance: adding it here would create a new launch template version
+    # and roll every node; EKS (not the executor role) launches these instances.
+    tags = merge({ for k, v in var.tags : k => v if k != "AdpInstance" }, { Name = "${var.cluster_name}-${each.key}", NodeRole = each.key })
   }
   tags = var.tags
 }

@@ -46,7 +46,10 @@ locals {
 
   # Identity tags win over reviewed tags so they cannot be overridden. Applied to
   # networking and to every cluster resource that supports tags.
-  network_tags = merge(try(var.reviewed_execution.tags, {}), { Team = var.team_id, ApplicationCode = var.application_code, Environment = var.environment })
+  # AdpInstance (= names.eks) lets the per-instance executor role act only on this
+  # instance's resources, not on every resource of the team.
+  workload_boundary = try(var.reviewed_execution.workload_permissions_boundary_arn, null)
+  network_tags      = merge(try(var.reviewed_execution.tags, {}), { Team = var.team_id, ApplicationCode = var.application_code, Environment = var.environment, AdpInstance = module.naming.names.eks })
 
   selections = {
     for role, size in local.requested_profiles : role => {
@@ -124,6 +127,8 @@ module "iam" {
   pod_identity_roles = try(var.reviewed_execution.pod_identity_roles, {})
   tags               = local.network_tags
   node_cni_policy    = local.self_managed_networking_addons
+
+  permissions_boundary = local.workload_boundary
 }
 module "eks" {
   source                        = "./modules/aws/eks"
@@ -190,6 +195,7 @@ module "access" {
   platform_admin_role_arns  = var.reviewed_execution.access.platform_admin_role_arns
   bot_assumer_arns          = var.reviewed_execution.access.bot_assumer_arns
   tags                      = local.network_tags
+  permissions_boundary      = local.workload_boundary
 }
 module "dns_addon" {
   source       = "./modules/aws/addons"
