@@ -15,6 +15,7 @@ eks:
           sizes:
             S: m7i.large
             M: m7i.xlarge
+            L: m7i.2xlarge
           default_size: S
           allowed_capacity_types: [ON_DEMAND]
           # Limites autorizados; desired se elige dentro del rango en la solicitud.
@@ -26,6 +27,7 @@ eks:
           sizes:
             S: m7i.xlarge
             M: m7i.2xlarge
+            L: m7i.4xlarge
           default_size: S
           allowed_capacity_types: [ON_DEMAND]
           min_count: 1
