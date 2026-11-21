@@ -55,7 +55,8 @@ function renderPure(context, selection, sources) {
       policy = c.nodegroups[role];
     if (Object.keys(g).sort().join() !== "desired,maximum,minimum,size")
       fail("Only size and quantities are developer choices");
-    if (!["S", "M"].includes(g.size) || !Object.hasOwn(policy.sizes, g.size))
+    // Size names (S, M, L, ...) are defined only by the central catalog.
+    if (typeof g.size !== "string" || !Object.hasOwn(policy.sizes, g.size) || !policy.sizes[g.size])
       fail("Unauthorized profile");
     for (const n of [g.minimum, g.desired, g.maximum])
       if (!Number.isInteger(n) || n < policy.min_count || n > policy.max_count)
