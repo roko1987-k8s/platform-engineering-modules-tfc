@@ -22,3 +22,8 @@ output "platform_admin_role_arns" {
   description = "Platform Engineering roles with cluster admin."
   value       = sort(keys(aws_eks_access_entry.platform))
 }
+
+output "cleanup_role_arn" {
+  description = "Cleanup role of this cluster (Destroy pre-step, assumed through adp-k8s-cleanup-broker)."
+  value       = aws_iam_role.cleanup.arn
+}

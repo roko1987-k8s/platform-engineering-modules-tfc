@@ -7,6 +7,8 @@
 #   - Tools role of THIS cluster: cluster admin, only to bootstrap Argo CD (Tools Agent),
 #     assumable only by the tools broker of this account and with the same Team condition.
 #     The tools broker must exist before this module is applied (IAM validates principals).
+#   - Cleanup role of THIS cluster: the Destroy's pre-step (stop Argo CD, delete
+#     LoadBalancer Services), Kubernetes group adp:destroy-cleanup, same Team condition.
 # The Terraform identity gets no Kubernetes access (bootstrap admin stays disabled).
 data "aws_partition" "current" {}
 data "aws_region" "current" {}
@@ -17,6 +19,8 @@ locals {
   bot_role_name    = substr("${var.name}-k8s-bot", 0, 64)
   tools_role_name  = substr("${var.name}-k8s-tools", 0, 64)
   tools_broker_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.tools_broker_role_name}"
+  # Destroy pre-step broker (Terraform Agent): must exist before this module is applied.
+  cleanup_broker_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.cleanup_broker_role_name}"
   # Both cluster roles only describe this cluster and tunnel through this jump host.
   tunnel_policy = jsonencode({
     Version = "2012-10-17"
@@ -145,6 +149,43 @@ resource "aws_eks_access_policy_association" "tools" {
   access_scope {
     type = "cluster"
   }
+}
+
+# --- Cleanup role of this cluster: the Destroy's pre-step (Terraform Agent) ---------
+# Before terraform destroy, the Destroy stops Argo CD's application controller and deletes
+# the LoadBalancer Services/Ingresses so the AWS Load Balancer Controller removes its NLBs
+# (otherwise they keep the ingress group in use). Kubernetes permissions come from the RBAC
+# of group adp:destroy-cleanup (tools repo, config/platform/base): no EKS access policy.
+resource "aws_iam_role" "cleanup" {
+  name                 = substr("${var.name}-k8s-cleanup", 0, 64)
+  description          = "Destroy pre-step of ${var.cluster_name}: stop Argo CD and delete LoadBalancer Services."
+  max_session_duration = 3600
+  permissions_boundary = var.permissions_boundary
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { AWS = local.cleanup_broker_arn }
+      Action    = ["sts:AssumeRole", "sts:SetSourceIdentity"]
+      # The broker session carries the cluster's team as a session tag.
+      Condition = { StringEquals = { "aws:PrincipalTag/Team" = var.team_id } }
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "cleanup" {
+  name   = "eks-describe-and-ssm-tunnel"
+  role   = aws_iam_role.cleanup.id
+  policy = local.tunnel_policy
+}
+
+resource "aws_eks_access_entry" "cleanup" {
+  cluster_name      = var.cluster_name
+  principal_arn     = aws_iam_role.cleanup.arn
+  type              = "STANDARD"
+  kubernetes_groups = ["adp:destroy-cleanup"]
+  tags              = var.tags
 }
 
 # --- SSM jump host: no inbound ports, no public IP ----------------------------
