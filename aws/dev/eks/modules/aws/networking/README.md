@@ -41,6 +41,9 @@ Other inputs: `name` and `subnet_names` from the central naming module
   `-node-NN`, `<names.vpc>-igw`, `<subnet>-nat`, `<names.vpc>-public`,
   `<names.vpc>-private-<zone>`.
   Tags carry `SubnetRole` and the identity tags supplied by the composition.
+  Node subnets also carry `kubernetes.io/role/internal-elb=1` (internal load
+  balancers such as the Istio gateway NLB); no subnet carries the public
+  `kubernetes.io/role/elb` tag.
 
 ## Two-stage gate (no circular dependency)
 
@@ -52,8 +55,7 @@ add-ons and node groups only when it is true.
 ## Pending decisions (not implemented)
 
 No VPC endpoint, NACL or security group is created. Pending: interface/gateway
-endpoints to keep ECR/S3/STS traffic off the NAT, internal load-balancer subnet
-tags, VPC flow logs, free-IP sizing per node group, and pinning zones by AZ ID if
+endpoints to keep ECR/S3/STS traffic off the NAT, VPC flow logs, free-IP sizing per node group, and pinning zones by AZ ID if
 the sorted-name placement is not acceptable. Networking still attests
 connectivity after the VPC exists.
 

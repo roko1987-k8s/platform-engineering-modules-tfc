@@ -93,7 +93,10 @@ resource "aws_subnet" "this" {
   availability_zone = each.value.availability_zone
   # No automatic public IP anywhere: NAT Gateways use Elastic IPs; nodes stay private.
   map_public_ip_on_launch = false
-  tags                    = merge(var.tags, { Name = each.key, SubnetRole = each.value.role })
+  # Node subnets host internal load balancers (the Istio gateway NLB): the AWS Load
+  # Balancer Controller discovers them by kubernetes.io/role/internal-elb. No public
+  # (kubernetes.io/role/elb) tag: no internet-facing load balancer is planned.
+  tags = merge(var.tags, { Name = each.key, SubnetRole = each.value.role }, each.value.role == "node" ? { "kubernetes.io/role/internal-elb" = "1" } : {})
 }
 
 resource "aws_internet_gateway" "this" {

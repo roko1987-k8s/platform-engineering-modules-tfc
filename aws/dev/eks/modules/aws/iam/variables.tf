@@ -27,3 +27,8 @@ variable "permissions_boundary" {
   type        = string
   default     = null
 }
+variable "lb_controller" {
+  description = "Create the AWS Load Balancer Controller role (Pod Identity)."
+  type        = bool
+  default     = false
+}

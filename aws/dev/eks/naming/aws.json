@@ -13,7 +13,8 @@
     "vpc": "vpc",
     "infra": "infra",
     "user": "user",
-    "s3": "s3"
+    "s3": "s3",
+    "sg": "sg"
   },
   "sequence_width": 2
 }

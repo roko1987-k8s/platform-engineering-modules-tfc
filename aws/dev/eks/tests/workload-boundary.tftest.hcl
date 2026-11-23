@@ -8,6 +8,7 @@ mock_provider "aws" {
   mock_resource "aws_iam_role" { defaults = { arn = "arn:aws:iam::123456789012:role/mock" } }
   mock_resource "aws_eks_cluster" { defaults = { arn = "arn:aws:eks:us-east-1:123456789012:cluster/mock" } }
   mock_resource "aws_instance" { defaults = { arn = "arn:aws:ec2:us-east-1:123456789012:instance/i-0123" } }
+  mock_data "aws_eks_addon_version" { defaults = { version = "v1.3.0-eksbuild.1" } }
 }
 
 variables {
@@ -118,14 +119,14 @@ run "launch_template_instances_keep_previous_tags" {
   command = plan
   module { source = "./modules/aws/nodegroups" }
   variables {
-    cluster_name              = "eksue1d004dev01"
-    kubernetes_version        = "1.35"
-    catalog                   = merge({ for k, v in yamldecode(file("../eks.yaml")).eks : k => v if k != "environments" }, { schema_version = 1, nodegroups = yamldecode(file("../eks.yaml")).eks.environments.dev.nodegroups })
-    subnet_ids                = ["subnet-0123456789abcdef0"]
-    node_role_arns            = { system = "arn:aws:iam::123456789012:role/a", user = "arn:aws:iam::123456789012:role/b" }
-    selections                = { system = { size = "M", capacity_type = "ON_DEMAND", minimum = 1, desired = 1, maximum = 2, release_version = null, taints = [] }, user = { size = "S", capacity_type = "ON_DEMAND", minimum = 1, desired = 1, maximum = 2, release_version = null, taints = [] } }
-    cluster_security_group_id = "sg-0123456789abcdef0"
-    tags                      = { Team = "D004", ApplicationCode = "adp-eks", Environment = "dev", AdpInstance = "eksue1d004dev01" }
+    cluster_name            = "eksue1d004dev01"
+    kubernetes_version      = "1.35"
+    catalog                 = merge({ for k, v in yamldecode(file("../eks.yaml")).eks : k => v if k != "environments" }, { schema_version = 1, nodegroups = yamldecode(file("../eks.yaml")).eks.environments.dev.nodegroups })
+    subnet_ids              = ["subnet-0123456789abcdef0"]
+    node_role_arns          = { system = "arn:aws:iam::123456789012:role/a", user = "arn:aws:iam::123456789012:role/b" }
+    selections              = { system = { size = "M", capacity_type = "ON_DEMAND", minimum = 1, desired = 1, maximum = 2, release_version = null, taints = [] }, user = { size = "S", capacity_type = "ON_DEMAND", minimum = 1, desired = 1, maximum = 2, release_version = null, taints = [] } }
+    node_security_group_ids = { system = "sg-0123456789abcdef0", user = "sg-0123456789abcdef1" }
+    tags                    = { Team = "D004", ApplicationCode = "adp-eks", Environment = "dev", AdpInstance = "eksue1d004dev01" }
   }
   assert {
     condition     = alltrue([for lt in values(aws_launch_template.role) : !contains(keys(one(lt.tag_specifications).tags), "AdpInstance") && lt.tags["AdpInstance"] == "eksue1d004dev01"])

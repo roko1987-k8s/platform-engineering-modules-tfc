@@ -1,0 +1,91 @@
+# Network rules of every cluster, defined ONCE for all clouds (EKS and AKS).
+# Each cloud module translates the logical endpoints to its own objects (AWS: security
+# groups; Azure: subnet prefixes and the internal load balancer's fixed IP) and must
+# produce exactly these flows. One logical rule = one entry with ALL its ports.
+#
+# Endpoints:
+#   any            any client (no other layer in front of the internal load balancer)
+#   lb             the internal load balancer of the Istio gateway
+#   system, user   node groups / node pools (and their pods)
+#   control_plane  the Kubernetes control plane
+#   jump           the SSM / bastion jump host of the platform
+#
+# protocol: tcp | udp | all (all = no ports, node to node only).
+# ports:    "N" or "N-M"; never a range that opens ports in between (80 and 443, not 80-443).
+# status:   active | pending (documented, not created)
+# clouds:   per-cloud notes when a cloud cannot express the rule exactly.
+schema: adp-network-rules-v1
+
+endpoints: [any, lb, system, user, control_plane, jump]
+
+rules:
+  "100":
+    description: control plane to nodes (HTTPS webhooks, kubelet 10250, webhooks on high ports)
+    sources: [control_plane]
+    destinations: [system, user]
+    protocol: tcp
+    ports: ["443", "1025-65535"]
+    clouds:
+      azure: not applicable (managed control plane reaches the nodes through its own tunnel)
+  "101":
+    description: nodes to the Kubernetes API
+    sources: [system, user]
+    destinations: [control_plane]
+    protocol: tcp
+    ports: ["443"]
+    clouds:
+      azure: not applicable (API server reached through the managed endpoint)
+  "102":
+    description: jump host to the nodes
+    sources: [jump]
+    destinations: [system, user]
+    protocol: tcp
+    ports: []
+    status: pending # ports to be defined; the jump host only tunnels to the API and the lb today
+  "103":
+    description: any client to the internal load balancer
+    sources: [any, jump]
+    destinations: [lb]
+    protocol: tcp
+    ports: ["80", "443"]
+  "104":
+    description: internal load balancer to the Istio gateway pods (15021 health check)
+    sources: [lb]
+    destinations: [user]
+    protocol: tcp
+    ports: ["80", "443", "15021"]
+    clouds:
+      azure: the load balancer preserves the client IP, so the source becomes any (80, 443) plus the AzureLoadBalancer tag (15021)
+  "110":
+    description: System to User
+    sources: [system]
+    destinations: [user]
+    protocol: all
+  "111":
+    description: User to System (DNS to CoreDNS, istiod)
+    sources: [user]
+    destinations: [system]
+    protocol: all
+  "112":
+    description: User to User
+    sources: [user]
+    destinations: [user]
+    protocol: all
+  "113":
+    description: System to System
+    sources: [system]
+    destinations: [system]
+    protocol: all
+
+# Not rules but the default of every cloud object (AWS: implicit; Azure: explicit DenyAll).
+denials:
+  "210": { destination: system, description: anything not allowed above to System }
+  "212": { destination: user, description: anything not allowed above to User }
+
+# Node egress stays open until application delivery (then rule 502: TCP 443 + the egress
+# half of every rule above).
+egress:
+  nodes: { sources: [system, user], destination: internet, protocol: all, status: open-until-502 }
+
+# Reviewed custom rules (another Golden Path), between the allows and the denials.
+custom_range: { from: 150, to: 199 }

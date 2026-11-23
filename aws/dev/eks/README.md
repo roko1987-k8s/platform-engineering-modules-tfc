@@ -1,9 +1,9 @@
 # Composición EKS para Terraform Agent — bloqueada
 
 Rutas de este documento relativas a la raíz del repositorio. Catálogo autorizado:
-`aws/dev/eks.yaml`. Plantilla principal: `aws/dev/main.tf`. Ocho módulos permanecen
+`aws/dev/eks.yaml`. Plantilla principal: `aws/dev/main.tf`. Los módulos están
 en `aws/dev/eks/modules/`: networking, IAM, security-groups, EKS, nodegroups,
-add-ons, observability y naming. Las fuentes Git de la plantilla EKS apuntan a
+add-ons, access, load-balancer-controller, observability y naming. Las fuentes Git de la plantilla EKS apuntan a
 `roko1987-k8s/platform-engineering-modules-tfc` y conservan sus rutas y contratos.
 Observability permanece disponible como módulo independiente; la plantilla actual
 no lo invoca. Addons se utiliza en dos fases; no se añade wiring nuevo.
@@ -133,14 +133,21 @@ networking = {
   los node groups `<names.eks>-system|user`). Tags `Team`,
   `ApplicationCode` y `Environment` desde las entradas autorizadas, en el
   networking y en todos los recursos del clúster que admiten tags.
-- Security Groups: no se crea ningún SG propio. EKS crea y administra el
-  Cluster Security Group (`aws_eks_cluster.vpc_config[0].cluster_security_group_id`)
-  y lo asocia al control plane y a los nodos; los launch templates no definen SG.
-  Reglas administradas por EKS: ingress de todo el tráfico desde el propio SG
-  (API 443, kubelet 10250, DNS 53, tráfico node↔node) y egress a `0.0.0.0/0` por
-  el NAT. Las reglas aprobadas entre `system`, `user` y `control_plane` ya están
-  cubiertas y no crean recursos (`covered_by_eks`); solo los flujos hacia SG de
-  endpoints revisados (`external_destinations`) crean reglas egress en Terraform.
+- Security Groups (`modules/aws/security-groups`): SG propios `<names.sg>-system`,
+  `<names.sg>-user` y `<names.sg>-ingress` (NLB interno del gateway). Los launch
+  templates asignan el de cada rol, así que EKS deja de poner su Cluster Security
+  Group en los nodos; ese grupo (lo crea EKS, inevitable) queda solo en el control
+  plane. Cada flujo es una regla explícita con tag `RuleId`: 100 control plane →
+  nodos (TCP 443 y 1025-65535), 101 nodos → API (443), 103 any → NLB (80/443),
+  104 NLB → User (80, 443, 15021), 110-113 entre nodos; salida de los nodos libre
+  (502 no aplicada). 210/212 son la denegación por defecto de los SG. Reglas custom
+  solo en 150-199 desde `reviewed_execution.custom_security_group_rules`.
+- AWS Load Balancer Controller (`modules/aws/load-balancer-controller` + rol
+  `<names.eks>-lb-controller` en IAM, política oficial v3.6.3 bajo el workload
+  boundary): agente de EKS Pod Identity como add-on administrado y asociación de
+  `aws-load-balancer-controller/aws-load-balancer-controller`. El controlador lo instalan las tools.
+  Las subredes `node` llevan `kubernetes.io/role/internal-elb=1` para el NLB interno.
+  Salida `load_balancer_controller`: clúster, VPC, rol y SG `ingress` para las tools.
 - Gates (`terraform_data.networking_gate`, solo más estrictos):
   `NETWORKING_PENDING` sin red aprobada y `EXECUTION_INPUT_INCOMPLETE` en
   `EKS_CLUSTER` si se declara un `resource_prefix` distinto de `names.eks`.
