@@ -220,6 +220,15 @@ module "load_balancer_controller" {
   tags               = local.network_tags
   depends_on         = [module.nodegroups]
 }
+# Metrics Server (EKS community add-on) for the HPAs of the platform tools; after the nodes.
+module "metrics_server" {
+  source             = "./modules/aws/metrics-server"
+  count              = local.cluster_ready ? 1 : 0
+  cluster_name       = module.eks[0].name
+  kubernetes_version = var.kubernetes_version
+  tags               = local.network_tags
+  depends_on         = [module.nodegroups]
+}
 module "dns_addon" {
   source       = "./modules/aws/addons"
   count        = local.cluster_ready ? 1 : 0

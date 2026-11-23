@@ -3,6 +3,7 @@ mock_provider "aws" {
   mock_data "aws_availability_zones" { defaults = { names = ["us-east-1a", "us-east-1b"] } }
   mock_data "aws_region" { defaults = { region = "us-east-1", name = "us-east-1" } }
   mock_data "aws_partition" { defaults = { partition = "aws" } }
+  mock_data "aws_eks_addon_version" { defaults = { version = "v0.9.1-eksbuild.2" } }
 }
 
 run "only_node_subnets_host_internal_load_balancers" {
@@ -68,5 +69,19 @@ run "no_controller_role_unless_requested" {
   assert {
     condition     = length(aws_iam_role.lb_controller) == 0
     error_message = "lb_controller defaults to false in the IAM module"
+  }
+}
+
+run "metrics_server_is_an_eks_addon" {
+  command = plan
+  module { source = "./modules/aws/metrics-server" }
+  variables {
+    cluster_name       = "eksue1d004dev01"
+    kubernetes_version = "1.36"
+    tags               = { AdpInstance = "eksue1d004dev01" }
+  }
+  assert {
+    condition     = aws_eks_addon.metrics_server.addon_name == "metrics-server" && aws_eks_addon.metrics_server.cluster_name == "eksue1d004dev01"
+    error_message = "Metrics Server is the EKS managed add-on of the cluster"
   }
 }
