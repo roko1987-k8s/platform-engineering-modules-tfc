@@ -5,6 +5,8 @@ locals {
   deployment       = "eks-${format("%02d", var.sequence)}"
   catalog_path     = "${path.module}/../eks.yaml"
   catalog_document = yamldecode(file(local.catalog_path)).eks
+  # Network rules of every cluster, defined once for all clouds (repository root).
+  network_rules = yamldecode(file("${path.module}/../../../network/rules.yaml"))
   # schema_version 2 separates profiles per environment. Submodules, variable
   # validations and outputs keep consuming the v1 shape for the selected one.
   catalog = merge(
@@ -77,6 +79,10 @@ resource "terraform_data" "networking_gate" {
       error_message = "NETWORKING_PENDING: draft files may be reviewed; terraform plan/apply are blocked until Networking assigns and approves the VPC and subnet CIDRs."
     }
     precondition {
+      condition     = !contains(keys(try(var.reviewed_execution.addons, {})), "eks-pod-identity-agent")
+      error_message = "EXECUTION_INPUT_INCOMPLETE: eks-pod-identity-agent is managed by modules/aws/load-balancer-controller; do not list it in reviewed_execution.addons."
+    }
+    precondition {
       condition     = !local.cluster_mode || local.prefix_matches_naming
       error_message = "EXECUTION_INPUT_INCOMPLETE: resource_prefix is deprecated; names come from module.naming and a declared resource_prefix must equal the computed EKS name."
     }
@@ -127,6 +133,7 @@ module "iam" {
   pod_identity_roles = try(var.reviewed_execution.pod_identity_roles, {})
   tags               = local.network_tags
   node_cni_policy    = local.self_managed_networking_addons
+  lb_controller      = true
 
   permissions_boundary = local.workload_boundary
 }
@@ -145,18 +152,23 @@ module "eks" {
   deletion_protection           = try(var.reviewed_execution.deletion_protection, true)
   tags                          = local.network_tags
 }
-# No custom security group: EKS creates the cluster SG and attaches it to the
-# control plane and to the managed nodes. Only approved additional rules are
-# added on it (none today: EKS-managed rules cover API, kubelet, DNS and egress).
-# Dependency is one-way (eks -> rules), so there is no cycle with the node groups.
+# Own security groups (system, user, ingress): AWS translation of network/rules.yaml
+# (rules defined once for every cloud); the EKS cluster group stays on the control plane
+# only. Custom rules (catalogue custom_range, 150-199) come from reviewed_execution.
+# Dependencies: eks, access (jump) -> security groups -> nodes.
 module "security_groups" {
   source                    = "./modules/aws/security-groups"
   count                     = local.cluster_ready ? 1 : 0
+  name                      = module.naming.names.sg
+  rules_catalog             = local.network_rules
+  cluster_name              = module.eks[0].name
   cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id
   vpc_id                    = module.networking[0].vpc_id
+  jump_enabled              = length(module.access) > 0
+  jump_security_group_id    = try(module.access[0].jump_security_group_id, null)
   tags                      = local.network_tags
-  rules                     = try(var.reviewed_execution.security_group_rules, {})
-  external_destinations     = try(var.reviewed_execution.external_destinations, {})
+  custom_rules              = try(var.reviewed_execution.custom_security_group_rules, {})
+  external_sources          = try(var.reviewed_execution.security_group_external_sources, {})
 }
 module "foundation_addons" {
   source       = "./modules/aws/addons"
@@ -176,9 +188,9 @@ module "nodegroups" {
   selections         = local.selections
   root_volumes       = try(var.reviewed_execution.root_volumes, null)
 
-  cluster_security_group_id = module.eks[0].aws_managed_cluster_security_group_id
-  tags                      = local.network_tags
-  depends_on                = [module.foundation_addons]
+  node_security_group_ids = module.security_groups[0].node_security_group_ids
+  tags                    = local.network_tags
+  depends_on              = [module.foundation_addons]
 }
 # Access (TD-049): Platform Engineering admin + read-only bot of this cluster, both
 # through the SSM jump host; only when the Agent injects reviewed_execution.access.
@@ -196,6 +208,17 @@ module "access" {
   bot_assumer_arns          = var.reviewed_execution.access.bot_assumer_arns
   tags                      = local.network_tags
   permissions_boundary      = local.workload_boundary
+}
+# AWS side of the AWS Load Balancer Controller (Pod Identity agent + association); the
+# controller is installed by the tools. After the node groups: the agent is a DaemonSet.
+module "load_balancer_controller" {
+  source             = "./modules/aws/load-balancer-controller"
+  count              = local.cluster_ready ? 1 : 0
+  cluster_name       = module.eks[0].name
+  kubernetes_version = var.kubernetes_version
+  role_arn           = module.iam[0].lb_controller_role_arn
+  tags               = local.network_tags
+  depends_on         = [module.nodegroups]
 }
 module "dns_addon" {
   source       = "./modules/aws/addons"

@@ -35,6 +35,25 @@ output "network" {
     nat_public_ips     = module.networking[0].nat_public_ips
   } : null
 }
+output "security_groups" {
+  description = "Own security groups and RuleIds; null in design mode."
+  value = length(module.security_groups) == 0 ? null : {
+    ids              = module.security_groups[0].security_group_ids
+    cluster          = module.security_groups[0].cluster_security_group_id
+    rules            = module.security_groups[0].rules
+    implicit_denials = module.security_groups[0].implicit_denials
+  }
+}
+output "load_balancer_controller" {
+  description = "Values the tools need to install the AWS Load Balancer Controller; null in design mode."
+  value = length(module.load_balancer_controller) == 0 ? null : {
+    cluster_name              = module.eks[0].name
+    vpc_id                    = module.networking[0].vpc_id
+    service_account           = module.load_balancer_controller[0].service_account
+    role_arn                  = module.iam[0].lb_controller_role_arn
+    ingress_security_group_id = module.security_groups[0].ingress_security_group_id
+  }
+}
 output "access" {
   description = "Cluster access (TD-049); null when no access was injected."
   value = length(module.access) == 0 ? null : {

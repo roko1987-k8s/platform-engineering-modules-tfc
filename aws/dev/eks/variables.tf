@@ -84,16 +84,19 @@ variable "reviewed_execution" {
       connectivity         = optional(object({ routing_reviewed = bool, private_api_reachable = bool, dns_reviewed = bool, registry_sts_eks_reachable = bool }))
     }))
     # Deprecated: names come from module.naming; if set it must equal names.eks.
-    resource_prefix       = optional(string)
-    kms_key_arn           = optional(string)
-    log_retention_days    = optional(number)
-    release_versions      = optional(map(string), {})
-    root_volumes          = optional(map(object({ size_gib = number, kms_key_arn = string })))
-    tags                  = optional(map(string), {})
-    security_group_rules  = optional(map(object({ relation = string, source = string, destination = string, protocol = string, from_port = number, to_port = number, approval_reference = string })), {})
-    external_destinations = optional(map(string), {})
-    pod_identity_roles    = optional(map(object({ policy_json = string })), {})
-    deletion_protection   = optional(bool, true)
+    resource_prefix    = optional(string)
+    kms_key_arn        = optional(string)
+    log_retention_days = optional(number)
+    release_versions   = optional(map(string), {})
+    root_volumes       = optional(map(object({ size_gib = number, kms_key_arn = string })))
+    tags               = optional(map(string), {})
+    # Custom security group rules, RuleId 150-199 (modules/aws/security-groups); base
+    # rules 100-113 are fixed in the module. One entry per logical rule with all its
+    # ports ("N" or "N-M"). Empty by default.
+    custom_security_group_rules     = optional(map(object({ rule = string, source = string, destination = string, protocol = string, ports = list(string), approval_reference = string })), {})
+    security_group_external_sources = optional(map(string), {})
+    pod_identity_roles              = optional(map(object({ policy_json = string })), {})
+    deletion_protection             = optional(bool, true)
     # Cluster access (TD-049, option B), injected by the Terraform Agent (never in Git):
     # Platform Engineering admin roles and the central bot identity. Null keeps the
     # cluster without any access entry (previous behavior).

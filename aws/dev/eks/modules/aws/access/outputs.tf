@@ -8,6 +8,11 @@ output "tools_role_arn" {
   value       = aws_iam_role.tools.arn
 }
 
+output "jump_security_group_id" {
+  description = "SSM jump host security group (egress to the internal NLB is added by security-groups)."
+  value       = aws_security_group.jump.id
+}
+
 output "jump_instance_id" {
   description = "SSM jump host: target of AWS-StartPortForwardingSessionToRemoteHost."
   value       = aws_instance.jump.id

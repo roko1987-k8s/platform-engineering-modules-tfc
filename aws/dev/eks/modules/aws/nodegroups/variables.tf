@@ -25,9 +25,13 @@ variable "node_role_arns" {
     error_message = "System/User require distinct EC2 IAM role ARNs."
   }
 }
-variable "cluster_security_group_id" {
-  description = "EKS cluster security group attached by EKS to the nodes (reported only)."
-  type        = string
+variable "node_security_group_ids" {
+  description = "Own security group per role (modules/aws/security-groups)."
+  type        = map(string)
+  validation {
+    condition     = try(toset(keys(var.node_security_group_ids)) == toset(["system", "user"]) && var.node_security_group_ids.system != var.node_security_group_ids.user, false)
+    error_message = "System and User need their own, distinct security groups."
+  }
 }
 variable "tags" {
   type = map(string)

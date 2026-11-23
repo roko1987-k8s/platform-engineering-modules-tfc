@@ -41,3 +41,22 @@ resource "aws_iam_role_policy" "pod_identity" {
   role     = aws_iam_role.pod_identity[each.key].id
   policy   = each.value.policy_json
 }
+
+# AWS Load Balancer Controller (internal NLB of the Istio gateway), through EKS Pod
+# Identity (aws-load-balancer-controller/aws-load-balancer-controller). Policy: the upstream
+# docs/install/iam_policy.json of the controller version pinned in the tools catalog
+# (v3.6.3), unchanged; its writes are scoped by the elbv2.k8s.aws/cluster tag. Under the
+# workload boundary like every role of the composition.
+resource "aws_iam_role" "lb_controller" {
+  count                = var.lb_controller ? 1 : 0
+  name                 = "${var.name}-lb-controller"
+  assume_role_policy   = jsonencode({ Version = "2012-10-17", Statement = [{ Effect = "Allow", Principal = { Service = "pods.eks.amazonaws.com" }, Action = ["sts:AssumeRole", "sts:TagSession"] }] })
+  permissions_boundary = var.permissions_boundary
+  tags                 = var.tags
+}
+resource "aws_iam_role_policy" "lb_controller" {
+  count  = var.lb_controller ? 1 : 0
+  name   = "aws-load-balancer-controller"
+  role   = aws_iam_role.lb_controller[0].id
+  policy = file("${path.module}/policies/aws-load-balancer-controller.json")
+}

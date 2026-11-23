@@ -1,8 +1,9 @@
 resource "aws_launch_template" "role" {
   for_each    = var.selections
   name_prefix = "${var.cluster_name}-${each.key}-"
-  # No vpc_security_group_ids or network_interfaces: EKS attaches its cluster
-  # security group to the nodes (any SG set here would replace it).
+  # Own node group (modules/aws/security-groups): with a group set here EKS no longer
+  # attaches its cluster security group to the nodes; rules 100/101 replace it.
+  vpc_security_group_ids = [var.node_security_group_ids[each.key]]
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
