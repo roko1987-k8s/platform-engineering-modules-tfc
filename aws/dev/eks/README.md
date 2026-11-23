@@ -3,7 +3,7 @@
 Rutas de este documento relativas a la raíz del repositorio. Catálogo autorizado:
 `aws/dev/eks.yaml`. Plantilla principal: `aws/dev/main.tf`. Los módulos están
 en `aws/dev/eks/modules/`: networking, IAM, security-groups, EKS, nodegroups,
-add-ons, access, load-balancer-controller, observability y naming. Las fuentes Git de la plantilla EKS apuntan a
+add-ons, access, load-balancer-controller, metrics-server, observability y naming. Las fuentes Git de la plantilla EKS apuntan a
 `roko1987-k8s/platform-engineering-modules-tfc` y conservan sus rutas y contratos.
 Observability permanece disponible como módulo independiente; la plantilla actual
 no lo invoca. Addons se utiliza en dos fases; no se añade wiring nuevo.
