@@ -12,7 +12,6 @@ fixtures, ejemplos de laboratorio ni resultados internos de pruebas.
 - `aws/dev/eks/naming/aws.json`: política que el generador incorpora al workspace.
 - `aws/dev/eks/tools/render-eks-pure.cjs`: renderizado en memoria, sin I/O ni procesos.
 - `aws/dev/eks/tools/render-eks.cjs`: adaptador local; formato explícito y opcional.
-- `aws/dev/eks/tools/render-eks.test.cjs`: pruebas sin fixtures ni artefactos.
 - `aws/dev/s3/modules/s3/` y `aws/dev/s3/bootstrap/`: módulo reutilizable y raíz
   independiente con backend local. Ver `aws/dev/s3/README.md`.
 - `aws/dev/iam/modules/github-oidc/`: roles por fase con proveedor OIDC existente.
@@ -61,15 +60,8 @@ completo compatible con sus checksums; no regenerar el lock si no coincide. Usa 
 repositorio, backend=false y lockfile=readonly; no descarga providers, no cambia
 restricciones ni modifica el lockfile de entrada. No ejecuta plan/apply/destroy ni
 pruebas que creen recursos. Una dependencia ausente es un bloqueo, no autorización
-para descargarla o actualizarla. Para comprobar solo el renderer, sin Terraform:
-
-```sh
-NODE_PATH="$RENDERER_NODE_MODULES" node --test aws/dev/eks/tools/render-eks.test.cjs
-```
-
-La prueba se incluye junto a la herramienta por solicitud explícita de revisión
-y publicación manual; no contiene fixtures ni genera artefactos. Otros ensayos y
-fixtures siguen fuera del árbol publicable.
+para descargarla o actualizarla. Las pruebas y fixtures se mantienen fuera del
+repositorio publicable.
 
 ## Versiones conservadas
 

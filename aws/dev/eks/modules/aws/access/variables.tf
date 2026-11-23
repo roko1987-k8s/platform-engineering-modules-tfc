@@ -59,6 +59,16 @@ variable "bot_assumer_arns" {
   }
 }
 
+variable "cleanup_broker_role_name" {
+  description = "Name of the Destroy pre-step broker in this account (assumed only by the Terraform Agent); the only principal of the cluster's cleanup role. Must exist before this module is applied."
+  type        = string
+  default     = "adp-k8s-cleanup-broker"
+  validation {
+    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,64}$", var.cleanup_broker_role_name))
+    error_message = "cleanup_broker_role_name must be an IAM role name."
+  }
+}
+
 variable "tools_broker_role_name" {
   description = "Name of the tools broker role in this account (assumed only by the Tools Agent); the only principal of the cluster's tools role."
   type        = string

@@ -68,18 +68,7 @@ permisos mínimos y aprobaciones independientes. El draft no sustituye esas revi
 No cambiar Security Groups ni reglas 110–502 para desbloquearlo.
 
 La validación operativa y restricciones de versiones se documentan en README.md
-de la raíz. Las pruebas del renderer incluidas para revisión/publicación manual
-se ejecutan sin fixtures, archivos de salida, red ni Terraform:
-
-```sh
-NODE_PATH="$RENDERER_NODE_MODULES" node --test aws/dev/eks/tools/render-eks.test.cjs
-```
-
-`RENDERER_NODE_MODULES` referencia dependencias ya instaladas y revisadas que
-contengan `yaml`. Si el entorno ya lo resuelve, puede omitirse NODE_PATH.
-No se instala ninguna dependencia. El formateador se prueba con un mock; la CLI
-de escritura y Terraform no se ejecutan. Otros ensayos/fixtures siguen fuera del
-árbol publicable.
+de la raíz. Las pruebas y fixtures se mantienen fuera del repositorio publicable.
 
 ## Referencias pendientes después de publicar manualmente
 
@@ -212,9 +201,3 @@ launch templates: eso crearía una versión nueva y reemplazaría los nodos.
 Con `null` el comportamiento es el anterior (modo `direct`). En un workspace
 existente, pasar a esta versión solo añade el tag y, con la variable, la
 boundary: cambios in-place, sin reemplazos.
-
-Pruebas offline (provider simulado, sin AWS):
-
-```sh
-cd aws/dev/eks && terraform init -backend=false && terraform test
-```
