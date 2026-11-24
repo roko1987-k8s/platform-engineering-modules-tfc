@@ -224,6 +224,12 @@ resource "aws_security_group" "jump" {
   description = "SSM jump host: no inbound; HTTPS out to SSM (via NAT) and to the private EKS endpoint."
   vpc_id      = var.vpc_id
   tags        = merge(var.tags, { Name = "${var.name}-ssm-jump" })
+  # A network interface created outside Terraform (e.g. an AWS CloudShell VPC environment
+  # using this group) keeps it in use until its owner releases it: the Destroy waits for
+  # it in the same run instead of failing at the provider default (15m).
+  timeouts {
+    delete = "30m"
+  }
 }
 
 resource "aws_vpc_security_group_egress_rule" "jump_https" {
