@@ -75,6 +75,11 @@ resource "aws_security_group" "role" {
   vpc_id      = var.vpc_id
   tags        = merge(var.tags, { Name = "${var.name}-${each.key}", SecurityGroupRole = each.key })
   # Terraform removes the default allow-all egress; egress is explicit below.
+  # Interfaces created outside Terraform (load balancers, CloudShell) release the group
+  # some minutes after their owner deletes them: wait in the same Destroy run.
+  timeouts {
+    delete = "30m"
+  }
 }
 
 # Ingress half, on the destination group.
