@@ -4,6 +4,8 @@ locals {
   environment      = var.environment
   catalog_path     = "${path.module}/../aks.yaml"
   catalog_document = yamldecode(file(local.catalog_path)).aks
+  # Network rules of every cluster, defined once for all clouds (repository root).
+  network_rules = yamldecode(file("${path.module}/../../../network/rules.yaml"))
   # schema_version 2 separates node pool profiles per environment; submodules
   # consume the flattened shape for the selected environment.
   catalog = merge(
@@ -19,6 +21,7 @@ locals {
   cluster_mode = var.proposal_mode == "AKS_CLUSTER"
 
   networking       = try(var.reviewed_execution.networking, null)
+  lb_ready         = length(try(local.networking.lb_subnet_cidrs, [])) == 1
   networking_ready = try(local.execution && var.reviewed_execution != null && local.networking != null && trimspace(local.networking.approval_reference) != "", false)
   admin_groups     = try(var.reviewed_execution.access.admin_group_object_ids, [])
   access_ready     = length(local.admin_groups) > 0
@@ -102,7 +105,17 @@ module "networking" {
   location            = var.region
   resource_group_name = data.azurerm_resource_group.workspace[0].name
   networking          = local.networking
+  rules_catalog       = local.network_rules
   tags                = local.tags
+}
+
+# Advisory (never blocks Plan/Apply): without the internal load balancer subnet the Istio
+# gateway has no fixed internal address and rules 103/104 have no destination.
+check "internal_load_balancer" {
+  assert {
+    condition     = !local.cluster_ready || local.lb_ready
+    error_message = "INTERNAL_LB_PENDING: the network catalog assigns no internal load balancer subnet to this workspace."
+  }
 }
 
 module "identity" {
@@ -146,11 +159,17 @@ module "nodepools" {
   tags               = local.tags
 }
 
+# Access: read-only readers, the agents of this team (bot, tools, cleanup) and
+# az aks command invoke (the private API has no jump host).
 module "access" {
-  source     = "./modules/azure/access"
-  count      = local.cluster_ready ? 1 : 0
-  cluster_id = module.aks[0].id
-  readers    = try(var.reviewed_execution.access.readers, {})
+  source                 = "./modules/azure/access"
+  count                  = local.cluster_ready ? 1 : 0
+  name                   = module.naming.names.aks
+  cluster_id             = module.aks[0].id
+  resource_group_id      = data.azurerm_resource_group.workspace[0].id
+  admin_group_object_ids = local.admin_groups
+  readers                = try(var.reviewed_execution.access.readers, {})
+  agents                 = try(var.reviewed_execution.access.agents, {})
 }
 
 # Pure naming is available for review even while networking blocks deployment.
@@ -164,5 +183,6 @@ module "naming" {
   subnet_counts = {
     system = length(try(local.networking.system_subnet_cidrs, []))
     user   = length(try(local.networking.user_subnet_cidrs, []))
+    lb     = length(try(local.networking.lb_subnet_cidrs, []))
   }
 }

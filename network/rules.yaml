@@ -8,7 +8,8 @@
 #   lb             the internal load balancer of the Istio gateway
 #   system, user   node groups / node pools (and their pods)
 #   control_plane  the Kubernetes control plane
-#   jump           the SSM / bastion jump host of the platform
+#   jump           the SSM jump host of the platform (AWS). Azure has none: the private API
+#                  is reached with az aks command invoke, so rules from jump do not apply
 #
 # protocol: tcp | udp | all (all = no ports, node to node only).
 # ports:    "N" or "N-M"; never a range that opens ports in between (80 and 443, not 80-443).
@@ -42,12 +43,16 @@ rules:
     protocol: tcp
     ports: []
     status: pending # ports to be defined; the jump host only tunnels to the API and the lb today
+    clouds:
+      azure: not applicable (no jump host)
   "103":
     description: any client to the internal load balancer
     sources: [any, jump]
     destinations: [lb]
     protocol: tcp
     ports: ["80", "443"]
+    clouds:
+      azure: destination is the load balancer subnet prefix on the User NSG (Azure keeps the frontend IP as destination)
   "104":
     description: internal load balancer to the Istio gateway pods (15021 health check)
     sources: [lb]
@@ -55,7 +60,7 @@ rules:
     protocol: tcp
     ports: ["80", "443", "15021"]
     clouds:
-      azure: the load balancer preserves the client IP, so the source becomes any (80, 443) plus the AzureLoadBalancer tag (15021)
+      azure: source lb is the AzureLoadBalancer tag (health probes); probes reach the node ports AKS assigns, so 30000-32767 is added
   "110":
     description: System to User
     sources: [system]

@@ -22,6 +22,9 @@ resource "azurerm_kubernetes_cluster" "this" {
     admin_group_object_ids = var.admin_group_object_ids
   }
 
+  # az aks command invoke is the only path to the private API (no jump host in the VNet).
+  run_command_enabled = true
+
   # Workload identity for in-cluster agents (no static credentials).
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
