@@ -39,11 +39,11 @@ variable "sequence" {
   }
 }
 variable "subnet_counts" {
-  description = "How many system and user subnet names to derive from names.vnet."
-  type        = object({ system = optional(number, 0), user = optional(number, 0) })
+  description = "How many system, user and internal load balancer subnet names to derive from names.vnet."
+  type        = object({ system = optional(number, 0), user = optional(number, 0), lb = optional(number, 0) })
   default     = {}
   validation {
-    condition     = alltrue([for n in [var.subnet_counts.system, var.subnet_counts.user] : n >= 0 && n <= 16 && floor(n) == n])
+    condition     = alltrue([for n in [var.subnet_counts.system, var.subnet_counts.user, var.subnet_counts.lb] : n >= 0 && n <= 16 && floor(n) == n])
     error_message = "Subnet counts must be integers between 0 and 16."
   }
 }

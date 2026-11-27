@@ -79,12 +79,15 @@ variable "reviewed_execution" {
       vnet_cidr           = string
       system_subnet_cidrs = list(string)
       user_subnet_cidrs   = list(string)
+      lb_subnet_cidrs     = optional(list(string), [])
       approval_reference  = string
     }))
-    # Platform Engineering admin groups and read-only principals by purpose (e.g. sre_agent).
+    # Platform Engineering admin groups, read-only principals by purpose (e.g. sre_agent) and
+    # this team's agent identities (Entra ID object IDs issued by the platform).
     access = optional(object({
       admin_group_object_ids = list(string)
       readers                = optional(map(string), {})
+      agents                 = optional(object({ bot = optional(string), tools = optional(string), cleanup = optional(string) }), {})
     }), { admin_group_object_ids = [] })
     tags                = optional(map(string), {})
     deletion_protection = optional(bool, true)

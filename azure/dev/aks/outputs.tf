@@ -32,6 +32,14 @@ output "network" {
     user_subnet_id   = module.networking[0].user_subnet_id
     nat_gateway_id   = module.networking[0].nat_gateway_id
     nat_public_ip    = module.networking[0].nat_public_ip
+    network_rules    = module.networking[0].network_rules
+  } : null
+}
+output "internal_load_balancer" {
+  description = "Subnet and fixed IP for the Istio gateway's internal load balancer (first usable address); null without the subnet."
+  value = local.networking_ready && local.lb_ready ? {
+    subnet_name = module.networking[0].lb_subnet.name
+    ip          = cidrhost(module.networking[0].lb_subnet.cidr, 4)
   } : null
 }
 output "cluster" {
@@ -40,5 +48,6 @@ output "cluster" {
     name            = module.aks[0].name
     private_fqdn    = module.aks[0].private_fqdn
     oidc_issuer_url = module.aks[0].oidc_issuer_url
+    access          = module.access[0].agent_access
   } : null
 }

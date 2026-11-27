@@ -4,7 +4,7 @@ variable "name" {
 }
 variable "subnet_names" {
   description = "Subnet names per role from the naming module, in CIDR order."
-  type        = object({ system = list(string), user = list(string) })
+  type        = object({ system = list(string), user = list(string), lb = optional(list(string), []) })
 }
 variable "location" {
   type = string
@@ -14,11 +14,12 @@ variable "resource_group_name" {
   type        = string
 }
 variable "networking" {
-  description = "Approved networking: one VNet block and one subnet per node pool role."
+  description = "Approved networking: one VNet block, one subnet per node pool role and, optionally, the internal load balancer subnet."
   type = object({
     vnet_cidr           = string
     system_subnet_cidrs = list(string)
     user_subnet_cidrs   = list(string)
+    lb_subnet_cidrs     = optional(list(string), [])
     approval_reference  = string
   })
   validation {
@@ -31,6 +32,14 @@ variable "networking" {
     condition     = trimspace(var.networking.approval_reference) != ""
     error_message = "An approval reference from the network catalog is required."
   }
+  validation {
+    condition     = length(var.networking.lb_subnet_cidrs) <= 1 && alltrue([for cidr in var.networking.lb_subnet_cidrs : can(cidrhost(cidr, 4))])
+    error_message = "At most one valid internal load balancer subnet CIDR is allowed."
+  }
+}
+variable "rules_catalog" {
+  description = "network/rules.yaml (adp-network-rules-v1): the rules of every cluster, defined once for all clouds."
+  type        = any
 }
 variable "tags" {
   type = map(string)

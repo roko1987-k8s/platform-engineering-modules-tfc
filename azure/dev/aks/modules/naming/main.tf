@@ -12,7 +12,7 @@ locals {
   }
   # Subnets derive from the VNet name so they stay grouped with their network.
   subnet_names = {
-    for role in ["system", "user"] : role => (
+    for role in ["system", "user", "lb"] : role => (
       local.names.vnet == null ? [] :
       [for i in range(var.subnet_counts[role]) : format("%s-%s-%02d", local.names.vnet, role, i + 1)]
     )

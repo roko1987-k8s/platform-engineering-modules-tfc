@@ -2,7 +2,10 @@ locals {
   subnets = merge(
     { for i, cidr in var.networking.system_subnet_cidrs : var.subnet_names.system[i] => { role = "system", cidr = cidr } },
     { for i, cidr in var.networking.user_subnet_cidrs : var.subnet_names.user[i] => { role = "user", cidr = cidr } },
+    { for i, cidr in var.networking.lb_subnet_cidrs : var.subnet_names.lb[i] => { role = "lb", cidr = cidr } },
   )
+  # Only node subnets need egress; the internal load balancer subnet holds frontend IPs only.
+  node_subnets = { for name, subnet in local.subnets : name => subnet if subnet.role != "lb" }
 }
 
 resource "azurerm_virtual_network" "this" {
@@ -21,8 +24,8 @@ resource "azurerm_subnet" "this" {
   address_prefixes     = [each.value.cidr]
 }
 
-# One NSG per subnet with Azure's default rules only (VNet and load balancer
-# inbound, internet inbound denied). AKS manages its own rules on its node NSG.
+# One NSG per subnet. Node subnets carry the Azure translation of network/rules.yaml
+# (rules.tf); AKS also manages its own rules on the node NSG of its resource group.
 resource "azurerm_network_security_group" "this" {
   for_each            = local.subnets
   name                = "${each.key}-nsg"
@@ -62,7 +65,7 @@ resource "azurerm_nat_gateway_public_ip_association" "this" {
 }
 
 resource "azurerm_subnet_nat_gateway_association" "this" {
-  for_each       = local.subnets
+  for_each       = local.node_subnets
   subnet_id      = azurerm_subnet.this[each.key].id
   nat_gateway_id = azurerm_nat_gateway.this.id
 }
