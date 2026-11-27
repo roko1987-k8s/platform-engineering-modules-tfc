@@ -24,25 +24,27 @@ aks:
           sizes:
             S: Standard_D4s_v5
             M: Standard_D8s_v5
+            L: Standard_D16s_v5
           default_size: S
           min_count: 1
           max_count: 3
           default_count: 1
           # Classic CNI: (max_count + 1 surge) x (max_pods + 1) must fit the /24 subnet.
-          max_pods: 30
+          max_pods: 40
 
         user:
           sizes:
             S: Standard_D4s_v5
             M: Standard_D8s_v5
+            L: Standard_D16s_v5
           default_size: M
           min_count: 1
           max_count: 2
           default_count: 1
-          max_pods: 30
+          max_pods: 40
 
         limits:
-          max_total_nodes: 5
+          max_total_nodes: 12
 
   networking:
     conformity: pending
