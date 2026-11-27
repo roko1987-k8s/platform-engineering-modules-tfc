@@ -14,6 +14,7 @@ network:
   layout:
     system: [0]
     user: [1]
+    lb: [2]
   approval_reference: "ADP-IPAM-{team}-{deployment}"
   environments:
     dev:
