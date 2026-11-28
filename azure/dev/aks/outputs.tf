@@ -17,6 +17,10 @@ output "proposed_subnet_names" {
   description = "Subnet names for review; empty until the network catalog supplies CIDRs."
   value       = module.naming.subnet_names
 }
+output "proposed_pool_names" {
+  description = "Node pool names for review (<team><role><NN>); the nodes inherit them."
+  value       = module.naming.pool_names
+}
 output "networking_status" {
   value = {
     networking = local.networking_ready ? "READY" : "PENDING"
@@ -49,5 +53,7 @@ output "cluster" {
     private_fqdn    = module.aks[0].private_fqdn
     oidc_issuer_url = module.aks[0].oidc_issuer_url
     access          = module.access[0].agent_access
+    # Label agentpool=<name> on every node, for workloads that pick a pool.
+    node_pools = { system = module.aks[0].system_pool_name, user = module.nodepools[0].user_pool_name }
   } : null
 }

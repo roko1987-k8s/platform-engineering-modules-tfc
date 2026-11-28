@@ -3,8 +3,8 @@ aks:
   configuration_model: system_user_profiles
 
   kubernetes:
-    # Verify against the versions AKS supports in the region before the first real plan.
-    allowed_versions: ["1.33", "1.34", "1.35"]
+    # Free tier: only versions with standard support in the region (1.31-1.33 are LTS-only there and need Premium).
+    allowed_versions: ["1.34", "1.35", "1.36"]
 
   cluster:
     allowed_regions: [eastus]

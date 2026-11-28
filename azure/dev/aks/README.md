@@ -9,7 +9,7 @@ módulo referenciado por tag. Rutas relativas a la raíz del repositorio.
 |---|---|
 | `../aks.yaml` | Catálogo (schema v2): versiones, región, rango de servicios, tamaños, límites y `max_pods` |
 | `../network.yaml` | Pool de red propio de Azure (Regla A, `10.0.0.0/16`–`10.99.0.0/16`) |
-| `naming/azure.json`, `modules/naming` | Nombres deterministas (`akseusd005dev01`, `rgeus…`, `steus…`, `vnet…`) |
+| `naming/azure.json`, `modules/naming` | Nombres deterministas (`akseusd005dev01`, `rgeus…`, `steus…`, `vnet…`) y de los pools (`d005sys01`, `d005usr01`) |
 | `../../../network/rules.yaml` | Reglas de red de todos los clústeres (una sola vez para AWS y Azure) |
 | `modules/azure/networking` | VNet, subredes system/user y del balanceador interno, NSG con las reglas de `rules.yaml`, NAT gateway |
 | `modules/azure/identity` | Identidades administradas del plano de control y kubelet |

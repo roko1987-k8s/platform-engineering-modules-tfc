@@ -16,6 +16,14 @@ output "names" {
     error_message = "The proposed AKS name is not a valid AKS DNS prefix."
   }
 }
+output "pool_names" {
+  description = "Deterministic AKS node pool names <team><role><NN> for system, user and the system pool rotation."
+  value       = local.pool_names
+  precondition {
+    condition     = alltrue([for name in values(local.pool_names) : can(regex("^[a-z][a-z0-9]{0,11}$", name))])
+    error_message = "A proposed node pool name is not a valid AKS Linux pool name (1-12 lowercase letters and digits)."
+  }
+}
 output "subnet_names" {
   description = "Deterministic subnet names <names.vnet>-<role>-NN, in CIDR order; empty unless subnet_counts is set."
   value       = local.subnet_names

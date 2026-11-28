@@ -1,5 +1,5 @@
 resource "azurerm_kubernetes_cluster_node_pool" "user" {
-  name                  = "user"
+  name                  = var.name
   kubernetes_cluster_id = var.cluster_id
   mode                  = "User"
   vm_size               = var.user.vm_size
@@ -11,7 +11,9 @@ resource "azurerm_kubernetes_cluster_node_pool" "user" {
   node_count            = var.user.desired
   max_pods              = var.user.max_pods
   os_disk_type          = "Managed"
-  tags                  = var.tags
+  # Same label as the EKS node groups (e.g. the Istio gateway runs on the user nodes).
+  node_labels = { "platform.example/node-role" = "user" }
+  tags        = var.tags
   upgrade_settings {
     max_surge = "10%"
   }
