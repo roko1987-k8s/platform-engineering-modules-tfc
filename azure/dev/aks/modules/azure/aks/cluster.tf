@@ -40,7 +40,7 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 
   default_node_pool {
-    name                         = "system"
+    name                         = var.pool_names.system
     vm_size                      = var.system.vm_size
     vnet_subnet_id               = var.system_subnet_id
     orchestrator_version         = var.kubernetes_version
@@ -51,8 +51,10 @@ resource "azurerm_kubernetes_cluster" "this" {
     node_count                   = var.system.desired
     max_pods                     = var.system.max_pods
     os_disk_type                 = "Managed"
-    temporary_name_for_rotation  = "systemtmp"
-    tags                         = var.tags
+    temporary_name_for_rotation  = var.pool_names.rotation
+    # Same label as the EKS node groups: platform tools choose the pool by role, on any cloud.
+    node_labels = { "platform.example/node-role" = "system" }
+    tags        = var.tags
     upgrade_settings {
       max_surge = "10%"
     }

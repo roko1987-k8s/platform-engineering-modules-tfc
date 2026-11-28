@@ -41,6 +41,10 @@ variable "system" {
   description = "Selected system pool: VM size, counts and max pods from the catalog."
   type        = object({ vm_size = string, minimum = number, desired = number, maximum = number, max_pods = number })
 }
+variable "pool_names" {
+  description = "Node pool names from the naming module: system and its rotation name."
+  type        = object({ system = string, rotation = string })
+}
 variable "system_subnet_id" {
   type = string
 }

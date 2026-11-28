@@ -142,6 +142,7 @@ module "aks" {
   control_plane_identity_id = module.identity[0].control_plane_identity_id
   kubelet                   = module.identity[0].kubelet
   system                    = local.selections.system
+  pool_names                = { system = module.naming.pool_names.system, rotation = module.naming.pool_names.rotation }
   system_subnet_id          = module.networking[0].system_subnet_id
   deletion_protection       = try(var.reviewed_execution.deletion_protection, true)
   tags                      = local.tags
@@ -153,6 +154,7 @@ module "nodepools" {
   source             = "./modules/azure/nodepools"
   count              = local.cluster_ready ? 1 : 0
   cluster_id         = module.aks[0].id
+  name               = module.naming.pool_names.user
   kubernetes_version = var.kubernetes_version
   user               = local.selections.user
   user_subnet_id     = module.networking[0].user_subnet_id

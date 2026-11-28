@@ -10,3 +10,6 @@ output "private_fqdn" {
 output "oidc_issuer_url" {
   value = azurerm_kubernetes_cluster.this.oidc_issuer_url
 }
+output "system_pool_name" {
+  value = azurerm_kubernetes_cluster.this.default_node_pool[0].name
+}

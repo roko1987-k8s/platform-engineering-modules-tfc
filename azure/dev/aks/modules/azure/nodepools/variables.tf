@@ -1,6 +1,10 @@
 variable "cluster_id" {
   type = string
 }
+variable "name" {
+  description = "User node pool name from the naming module (<team>usr<NN>)."
+  type        = string
+}
 variable "kubernetes_version" {
   type = string
 }
